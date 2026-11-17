@@ -1,6 +1,20 @@
 [package]
 name = "omni-infrastructure"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+description = "Container forensics (OCI/Docker/Dockerfile linter) and IaC security validator (Kubernetes RBAC/Terraform plan/AWS/GCP IAM) for OMNI"
+authors = ["Rajveersinh Pardeshi <daveaddams91@gmail.com>"]
+license = "MIT OR Apache-2.0"
 
 [dependencies]
+omni-core = { workspace = true }
+omni-registry = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+regex = { workspace = true }
+tar = "0.4"
+
+[dev-dependencies]
+tokio = { workspace = true }
