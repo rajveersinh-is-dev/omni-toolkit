@@ -18,7 +18,18 @@ omni-storage = { workspace = true }
 omni-encoders = { workspace = true }
 omni-crypto = { workspace = true }
 omni-text = { workspace = true }
+omni-code = { workspace = true }
+omni-documents = { workspace = true }
+omni-pdf = { workspace = true }
+omni-media = { workspace = true }
+omni-network = { workspace = true }
+omni-pcap = { workspace = true }
 omni-binary = { workspace = true }
+omni-firmware = { workspace = true }
+omni-filesystems = { workspace = true }
+omni-infrastructure = { workspace = true }
+omni-ai = { workspace = true }
+omni-system = { workspace = true }
 
 tokio = { workspace = true }
 ratatui = { workspace = true }
@@ -26,3 +37,4 @@ crossterm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
+hex = { workspace = true }

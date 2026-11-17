@@ -15,8 +15,25 @@ omni-core = { workspace = true }
 omni-registry = { workspace = true }
 omni-pipeline = { workspace = true }
 omni-storage = { workspace = true }
+omni-workers = { workspace = true }
 omni-api = { workspace = true }
+omni-encoders = { workspace = true }
+omni-crypto = { workspace = true }
+omni-text = { workspace = true }
+omni-code = { workspace = true }
+omni-documents = { workspace = true }
+omni-pdf = { workspace = true }
+omni-media = { workspace = true }
+omni-network = { workspace = true }
+omni-pcap = { workspace = true }
+omni-binary = { workspace = true }
+omni-firmware = { workspace = true }
+omni-filesystems = { workspace = true }
+omni-infrastructure = { workspace = true }
+omni-ai = { workspace = true }
+omni-system = { workspace = true }
 
+axum = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
