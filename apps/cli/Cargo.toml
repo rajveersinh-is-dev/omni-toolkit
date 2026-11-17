@@ -1,0 +1,44 @@
+[package]
+name = "omni"
+version = "0.1.0"
+edition = "2021"
+description = "OMNI - Universal Developer, Engineering, Security & Digital Forensics Multitool CLI"
+authors = ["Rajveersinh Pardeshi <daveaddams91@gmail.com>"]
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "omni"
+path = "src/main.rs"
+
+[dependencies]
+omni-core = { workspace = true }
+omni-registry = { workspace = true }
+omni-pipeline = { workspace = true }
+omni-storage = { workspace = true }
+omni-workers = { workspace = true }
+omni-security = { workspace = true }
+omni-encoders = { workspace = true }
+omni-crypto = { workspace = true }
+omni-text = { workspace = true }
+omni-code = { workspace = true }
+omni-documents = { workspace = true }
+omni-pdf = { workspace = true }
+omni-media = { workspace = true }
+omni-network = { workspace = true }
+omni-pcap = { workspace = true }
+omni-binary = { workspace = true }
+omni-firmware = { workspace = true }
+omni-filesystems = { workspace = true }
+omni-infrastructure = { workspace = true }
+omni-ai = { workspace = true }
+omni-system = { workspace = true }
+omni-visualization = { workspace = true }
+omni-api = { workspace = true }
+
+tokio = { workspace = true }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

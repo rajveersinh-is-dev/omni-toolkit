@@ -1,0 +1,30 @@
+[package]
+name = "omni-desktop"
+version = "0.1.0"
+edition = "2021"
+description = "OMNI - Desktop Shell & Local Webview Application"
+authors = ["Rajveersinh Pardeshi <daveaddams91@gmail.com>"]
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "omni-desktop"
+path = "src/main.rs"
+
+[dependencies]
+omni-core = { workspace = true }
+omni-registry = { workspace = true }
+omni-pipeline = { workspace = true }
+omni-storage = { workspace = true }
+omni-api = { workspace = true }
+
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+wry = { version = "0.49", optional = true }
+
+[features]
+default = []
+native-webview = ["dep:wry"]

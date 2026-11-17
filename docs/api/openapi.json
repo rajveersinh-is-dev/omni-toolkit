@@ -1,0 +1,107 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OMNI Universal Digital Engineering Toolkit API",
+    "version": "0.1.0",
+    "description": "Unified REST and WebSocket API for executing digital forensics, cryptographic, network, media, and binary analysis operations."
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "summary": "Check backend health and system capabilities",
+        "responses": {
+          "200": {
+            "description": "System health information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "version": { "type": "string" },
+                    "uptime_seconds": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/operations": {
+      "get": {
+        "summary": "List all registered operations",
+        "responses": {
+          "200": {
+            "description": "List of operation manifests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/OperationManifest" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/execute": {
+      "post": {
+        "summary": "Synchronously execute an operation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ExecuteRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Execution result",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ExecuteResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "OperationManifest": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "category": { "type": "string" },
+          "version": { "type": "string" },
+          "input_types": { "type": "array", "items": { "type": "string" } },
+          "output_types": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "ExecuteRequest": {
+        "type": "object",
+        "required": ["operation_id", "input"],
+        "properties": {
+          "operation_id": { "type": "string" },
+          "config": { "type": "object" },
+          "input": { "type": "string" }
+        }
+      },
+      "ExecuteResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "output": { "type": "string" },
+          "duration_ms": { "type": "number" },
+          "error": { "type": "string" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,106 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/omni-core",
+    "crates/omni-registry",
+    "crates/omni-pipeline",
+    "crates/omni-storage",
+    "crates/omni-workers",
+    "crates/omni-security",
+    "crates/omni-encoders",
+    "crates/omni-crypto",
+    "crates/omni-text",
+    "crates/omni-code",
+    "crates/omni-documents",
+    "crates/omni-pdf",
+    "crates/omni-media",
+    "crates/omni-network",
+    "crates/omni-pcap",
+    "crates/omni-binary",
+    "crates/omni-firmware",
+    "crates/omni-filesystems",
+    "crates/omni-infrastructure",
+    "crates/omni-ai",
+    "crates/omni-system",
+    "crates/omni-visualization",
+    "crates/omni-api",
+    "crates/omni-plugin-sdk",
+    "crates/omni-testkit",
+    "apps/cli",
+    "apps/tui",
+    "apps/desktop",
+]
+
+[workspace.package]
+version = "0.1.0"
+authors = ["Rajveersinh Pardeshi <daveaddams91@gmail.com>"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/rajveersinh-is-dev/omni-toolkit"
+homepage = "https://github.com/rajveersinh-is-dev/omni-toolkit"
+readme = "README.md"
+keywords = ["multitool", "cyberchef", "forensics", "cryptography", "developer-tools"]
+categories = ["command-line-utilities", "development-tools", "cryptography", "multimedia"]
+
+[workspace.dependencies]
+# Internal crates
+omni-core = { path = "crates/omni-core" }
+omni-registry = { path = "crates/omni-registry" }
+omni-pipeline = { path = "crates/omni-pipeline" }
+omni-storage = { path = "crates/omni-storage" }
+omni-workers = { path = "crates/omni-workers" }
+omni-security = { path = "crates/omni-security" }
+omni-encoders = { path = "crates/omni-encoders" }
+omni-crypto = { path = "crates/omni-crypto" }
+omni-text = { path = "crates/omni-text" }
+omni-code = { path = "crates/omni-code" }
+omni-documents = { path = "crates/omni-documents" }
+omni-pdf = { path = "crates/omni-pdf" }
+omni-media = { path = "crates/omni-media" }
+omni-network = { path = "crates/omni-network" }
+omni-pcap = { path = "crates/omni-pcap" }
+omni-binary = { path = "crates/omni-binary" }
+omni-firmware = { path = "crates/omni-firmware" }
+omni-filesystems = { path = "crates/omni-filesystems" }
+omni-infrastructure = { path = "crates/omni-infrastructure" }
+omni-ai = { path = "crates/omni-ai" }
+omni-system = { path = "crates/omni-system" }
+omni-visualization = { path = "crates/omni-visualization" }
+omni-api = { path = "crates/omni-api" }
+omni-plugin-sdk = { path = "crates/omni-plugin-sdk" }
+omni-testkit = { path = "crates/omni-testkit" }
+
+# Common runtime & utilities
+tokio = { version = "1.44", features = ["full"] }
+axum = { version = "0.8", features = ["ws", "macros", "multipart"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+async-trait = "0.1"
+futures = "0.3"
+uuid = { version = "1.16", features = ["v4", "v5", "v7", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+rusqlite = { version = "0.33", features = ["bundled"] }
+
+# CLI & TUI
+clap = { version = "4.5", features = ["derive", "env", "cargo"] }
+ratatui = "0.29"
+crossterm = { version = "0.28", features = ["event-stream"] }
+
+# Encoders & Hashing
+hex = "0.4"
+base64 = "0.22"
+bs58 = "0.5"
+sha2 = "0.10"
+sha3 = "0.10"
+md-5 = "0.10"
+ripemd = "0.1"
+blake3 = "1.6"
+crc32fast = "1.4"
+regex = "1.11"
+similar = "2.7"
