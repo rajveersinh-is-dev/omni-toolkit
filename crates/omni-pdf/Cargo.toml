@@ -1,6 +1,20 @@
 [package]
 name = "omni-pdf"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+description = "PDF multi-tool (split/merge/rotate), form extraction, FlateDecode decompression, and metadata scrubber for OMNI"
+authors = ["Rajveersinh Pardeshi <daveaddams91@gmail.com>"]
+license = "MIT OR Apache-2.0"
 
 [dependencies]
+omni-core = { workspace = true }
+omni-registry = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+lopdf = "0.35"
+flate2 = "1.0"
+
+[dev-dependencies]
+tokio = { workspace = true }
