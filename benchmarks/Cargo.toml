@@ -1,0 +1,19 @@
+[package]
+name = "omni-benchmarks"
+version = "0.1.0"
+edition = "2021"
+description = "Reproducible, high-resolution statistical benchmarks for OMNI operations"
+authors = ["Rajveersinh Pardeshi <daveaddams91@gmail.com>"]
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+omni-core = { workspace = true }
+omni-registry = { workspace = true }
+omni-encoders = { workspace = true }
+omni-crypto = { workspace = true }
+omni-text = { workspace = true }
+omni-visualization = { workspace = true }
+omni-testkit = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+serde_json = { workspace = true }

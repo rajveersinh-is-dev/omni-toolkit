@@ -1,0 +1,17 @@
+[package]
+name = "omni-examples"
+version = "0.1.0"
+edition = "2021"
+description = "Concrete usage examples and recipes for embedding OMNI crates into applications"
+authors = ["Rajveersinh Pardeshi <daveaddams91@gmail.com>"]
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+omni-core = { workspace = true }
+omni-registry = { workspace = true }
+omni-pipeline = { workspace = true }
+omni-encoders = { workspace = true }
+omni-crypto = { workspace = true }
+omni-text = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+serde_json = { workspace = true }

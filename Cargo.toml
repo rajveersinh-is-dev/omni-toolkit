@@ -29,6 +29,9 @@ members = [
     "apps/cli",
     "apps/tui",
     "apps/desktop",
+    "benchmarks",
+    "examples",
+    "tests",
 ]
 
 [workspace.package]
@@ -104,3 +107,4 @@ blake3 = "1.6"
 crc32fast = "1.4"
 regex = "1.11"
 similar = "2.7"
+
