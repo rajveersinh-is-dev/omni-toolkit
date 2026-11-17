@@ -1,6 +1,20 @@
 [package]
 name = "omni-binary"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+description = "Hex editor, IEEE-754 visualizer, multi-format executable inspector (ELF/PE/Mach-O/WASM), disassembly and CFG generator, serial/UART and CAN bus parser for OMNI"
+authors = ["Rajveersinh Pardeshi <daveaddams91@gmail.com>"]
+license = "MIT OR Apache-2.0"
 
 [dependencies]
+omni-core = { workspace = true }
+omni-registry = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+hex = { workspace = true }
+goblin = "0.9"
+
+[dev-dependencies]
+tokio = { workspace = true }

@@ -1,6 +1,20 @@
 [package]
 name = "omni-firmware"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+description = "Binwalk-compatible firmware signature scanner, entropy mapping, and embedded filesystem carver for OMNI"
+authors = ["Rajveersinh Pardeshi <daveaddams91@gmail.com>"]
+license = "MIT OR Apache-2.0"
 
 [dependencies]
+omni-core = { workspace = true }
+omni-registry = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+hex = { workspace = true }
+flate2 = "1.0"
+
+[dev-dependencies]
+tokio = { workspace = true }
