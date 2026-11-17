@@ -69,7 +69,7 @@ impl Operation for SocketToolOp {
                     "rtt_milliseconds": (rtt_micros as f64 / 1000.0 * 100.0).round() / 100.0,
                 })))
             }
-            "probe" | _ => {
+            _ => {
                 let target = config.get("target").and_then(|v| v.as_str()).unwrap_or("127.0.0.1");
                 let port = config.get("port").and_then(|v| v.as_u64()).unwrap_or(80) as u16;
                 validate_network_target(target, false)?;

@@ -42,7 +42,7 @@ impl Operation for PdfMultiToolOp {
                     .map_err(|e| OmniError::Execution { operation: "pdf_save".into(), message: e.to_string() })?;
                 Ok(DataPayload::bytes(out_bytes))
             }
-            "info" | _ => {
+            _ => {
                 let page_count = doc.get_pages().len();
                 let version = doc.version.clone();
                 let mut form_fields = Vec::new();

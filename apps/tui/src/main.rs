@@ -319,14 +319,8 @@ async fn main() -> anyhow::Result<()> {
                                 }
                                 FocusedPane::Operations => {
                                     let i = match app.operations_list_state.selected() {
-                                        Some(i) => {
-                                            if i > 0 {
-                                                i - 1
-                                            } else {
-                                                0
-                                            }
-                                        }
-                                        None => 0,
+                                        Some(i) if i > 0 => i - 1,
+                                        _ => 0,
                                     };
                                     app.operations_list_state.select(Some(i));
                                 }

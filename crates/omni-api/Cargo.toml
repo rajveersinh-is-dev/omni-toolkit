@@ -1,6 +1,25 @@
 [package]
 name = "omni-api"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+description = "Axum REST and WebSocket API server for OMNI"
+authors = ["Rajveersinh Pardeshi <daveaddams91@gmail.com>"]
+license = "MIT OR Apache-2.0"
 
 [dependencies]
+omni-core = { workspace = true }
+omni-registry = { workspace = true }
+omni-pipeline = { workspace = true }
+omni-storage = { workspace = true }
+omni-workers = { workspace = true }
+omni-security = { workspace = true }
+
+axum = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+futures = { workspace = true }

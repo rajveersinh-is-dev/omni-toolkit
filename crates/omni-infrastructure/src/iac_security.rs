@@ -118,7 +118,7 @@ impl Operation for IacSecurityOp {
                     "matched_statement": matched_rule,
                 })))
             }
-            "k8s" | _ => {
+            _ => {
                 let mut issues = Vec::new();
                 let kind = val.get("kind").and_then(|v| v.as_str()).unwrap_or("Unknown");
                 let metadata_name = val.get("metadata")

@@ -96,7 +96,7 @@ impl Operation for UniversalIdsOp {
                     "hex_bytes": hex::encode(u.as_bytes()),
                 })))
             }
-            "generate" | _ => {
+            _ => {
                 let id_type = config.get("type").and_then(|v| v.as_str()).unwrap_or("all");
 
                 let v4 = Uuid::new_v4().to_string();

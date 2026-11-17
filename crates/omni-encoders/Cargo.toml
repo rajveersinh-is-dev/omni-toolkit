@@ -1,6 +1,27 @@
 [package]
 name = "omni-encoders"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+description = "Universal encoders and serializers for OMNI (Base16-91, Punycode, URL, HTML, Escapes)"
+authors = ["Rajveersinh Pardeshi <daveaddams91@gmail.com>"]
+license = "MIT OR Apache-2.0"
 
 [dependencies]
+omni-core = { workspace = true }
+omni-registry = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+
+hex = { workspace = true }
+base64 = { workspace = true }
+bs58 = { workspace = true }
+urlencoding = "2.1"
+data-encoding = "2.8"
+html-escape = "0.2"
+idna = "1.0"
+quoted_printable = "0.5"
+
+[dev-dependencies]
+tokio = { workspace = true }

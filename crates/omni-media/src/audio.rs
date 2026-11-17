@@ -6,8 +6,9 @@ use serde_json::{json, Value};
 
 fn parse_pcm16_samples(bytes: &[u8]) -> Vec<f64> {
     let mut samples = Vec::with_capacity(bytes.len() / 2);
-    for chunk in bytes.chunks_exact(2) {
-        let val = i16::from_le_bytes([chunk[0], chunk[1]]);
+    let (chunks, _) = bytes.as_chunks::<2>();
+    for chunk in chunks {
+        let val = i16::from_le_bytes(*chunk);
         samples.push(val as f64 / 32768.0);
     }
     samples

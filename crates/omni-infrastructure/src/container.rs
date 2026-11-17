@@ -30,15 +30,14 @@ fn lint_dockerfile(content: &str) -> Vec<LintFinding> {
 
         let upper = trimmed.to_uppercase();
 
-        if upper.starts_with("FROM ") {
-            if upper.contains(":LATEST") || (!upper.contains(':') && !upper.contains('@') && !upper.contains("AS ")) {
-                findings.push(LintFinding {
-                    line: line_num,
-                    severity: "Warning".into(),
-                    rule: "DL3006".into(),
-                    message: "Always specify an explicit tag or digest instead of using 'latest'".into(),
-                });
-            }
+        if upper.starts_with("FROM ")
+            && (upper.contains(":LATEST") || (!upper.contains(':') && !upper.contains('@') && !upper.contains("AS "))) {
+            findings.push(LintFinding {
+                line: line_num,
+                severity: "Warning".into(),
+                rule: "DL3006".into(),
+                message: "Always specify an explicit tag or digest instead of using 'latest'".into(),
+            });
         }
 
         if upper.starts_with("USER ") {

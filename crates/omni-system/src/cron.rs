@@ -93,7 +93,7 @@ impl Operation for CronEngineOp {
                 next_executions.push(current.to_rfc3339());
             }
 
-            current = current + Duration::minutes(1);
+            current += Duration::minutes(1);
         }
 
         let description = format!(

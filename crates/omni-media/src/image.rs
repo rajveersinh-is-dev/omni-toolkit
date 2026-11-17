@@ -66,7 +66,7 @@ impl Operation for ImagePipelineOp {
                     "jpeg" | "jpg" => ImageFormat::Jpeg,
                     "bmp" => ImageFormat::Bmp,
                     "webp" => ImageFormat::WebP,
-                    "png" | _ => ImageFormat::Png,
+                    _ => ImageFormat::Png,
                 };
 
                 processed.write_to(&mut Cursor::new(&mut out_bytes), fmt)
@@ -206,7 +206,7 @@ impl Operation for ImageMetadataOp {
                     Ok(DataPayload::bytes(out))
                 }
             }
-            "inspect" | _ => {
+            _ => {
                 let is_jpeg = bytes.starts_with(&[0xFF, 0xD8]);
                 let is_png = bytes.starts_with(&[0x89, b'P', b'N', b'G']);
                 let mut app_markers = Vec::new();

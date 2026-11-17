@@ -82,8 +82,7 @@ impl Operation for EmbeddedSqlOp {
         let mut results = Vec::new();
         while let Some(row) = rows.next().map_err(|e| OmniError::Execution { operation: "fetch_row".into(), message: e.to_string() })? {
             let mut row_map = serde_json::Map::new();
-            for i in 0..col_count {
-                let name = &col_names[i];
+            for (i, name) in col_names.iter().enumerate().take(col_count) {
                 let val = match row.get_ref(i).unwrap() {
                     ValueRef::Null => Value::Null,
                     ValueRef::Integer(n) => json!(n),

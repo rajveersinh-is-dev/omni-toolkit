@@ -1,6 +1,19 @@
 [package]
 name = "omni-storage"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+description = "SQLite persistence, pipeline storage, and safe temporary file management for OMNI"
+authors = ["Rajveersinh Pardeshi <daveaddams91@gmail.com>"]
+license = "MIT OR Apache-2.0"
 
 [dependencies]
+omni-core = { workspace = true }
+omni-pipeline = { workspace = true }
+rusqlite = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+tempfile = "3.17"

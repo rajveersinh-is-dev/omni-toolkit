@@ -42,7 +42,7 @@ impl Operation for HardwareSerialOp {
                 frames.push(json!({
                     "byte_index": idx,
                     "hex": format!("0x{:02X}", byte),
-                    "char": if byte >= 32 && byte <= 126 { (byte as char).to_string() } else { ".".to_string() },
+                    "char": if (32..=126).contains(&byte) { (byte as char).to_string() } else { ".".to_string() },
                     "ones_count": ones,
                     "parity_ok": parity_valid,
                 }));

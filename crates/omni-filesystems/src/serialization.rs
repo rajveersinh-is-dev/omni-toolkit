@@ -205,7 +205,7 @@ impl Operation for BinaryFormatsOp {
                     "elements": elements,
                 })))
             }
-            "protobuf" | _ => {
+            _ => {
                 let fields = parse_protobuf_wire(&bytes, 0);
                 Ok(DataPayload::json(json!({
                     "format": "Protobuf (Wire Format)",

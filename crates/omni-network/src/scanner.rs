@@ -51,7 +51,7 @@ impl Operation for LabScannerOp {
                     "status": "Magic packet assembled successfully"
                 })))
             }
-            "scan" | _ => {
+            _ => {
                 let target = config.get("target").and_then(|v| v.as_str()).unwrap_or("127.0.0.1");
                 validate_network_target(target, false)?;
 

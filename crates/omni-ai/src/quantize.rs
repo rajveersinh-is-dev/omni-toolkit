@@ -56,7 +56,7 @@ impl Operation for QuantizeSimulatorOp {
                     q * scale
                 }).collect()
             }
-            "bf16" | _ => {
+            _ => {
                 // BF16 simulation: mask lower 16 bits of FP32
                 weights.iter().map(|&w| {
                     let f = w as f32;

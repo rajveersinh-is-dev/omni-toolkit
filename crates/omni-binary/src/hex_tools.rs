@@ -30,7 +30,7 @@ impl Operation for BinaryHexOp {
                 for (line_idx, chunk) in bytes.chunks(bytes_per_line).enumerate() {
                     let offset = line_idx * bytes_per_line;
                     let hex_part: Vec<String> = chunk.iter().map(|b| format!("{:02X}", b)).collect();
-                    let ascii_part: String = chunk.iter().map(|&b| if b >= 32 && b <= 126 { b as char } else { '.' }).collect();
+                    let ascii_part: String = chunk.iter().map(|&b| if (32..=126).contains(&b) { b as char } else { '.' }).collect();
 
                     let padding = "   ".repeat(bytes_per_line - chunk.len());
                     lines.push(format!("{:08X}:  {}{}{}|{}|", offset, hex_part.join(" "), padding, if chunk.len() > 8 { " " } else { "" }, ascii_part));

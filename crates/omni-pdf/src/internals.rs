@@ -34,18 +34,15 @@ impl Operation for PdfInternalsOp {
                     .map_err(|e| OmniError::Execution { operation: "pdf_decompress".into(), message: e.to_string() })?;
                 Ok(DataPayload::bytes(out))
             }
-            "inspect" | _ => {
+            _ => {
                 let mut objects_summary = Vec::new();
                 for ((id, gen), obj) in &doc.objects {
                     let type_name = match obj {
                         Object::Array(_) => "Array",
                         Object::Boolean(_) => "Boolean",
                         Object::Dictionary(d) => {
-                            if let Ok(t) = d.get(b"Type") {
-                                match t {
-                                    Object::Name(_n) => "Dict:Name",
-                                    _ => "Dictionary",
-                                }
+                            if let Ok(Object::Name(_n)) = d.get(b"Type") {
+                                "Dict:Name"
                             } else {
                                 "Dictionary"
                             }

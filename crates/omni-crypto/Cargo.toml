@@ -1,6 +1,67 @@
 [package]
 name = "omni-crypto"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+description = "Comprehensive Cryptography, Legacy Ciphers, Hashing, Checksums, KDF, PKI, JWT, and Entropy suite for OMNI"
+authors = ["Rajveersinh Pardeshi <daveaddams91@gmail.com>"]
+license = "MIT OR Apache-2.0"
 
 [dependencies]
+omni-core = { workspace = true }
+omni-registry = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+hex = { workspace = true }
+base64 = { workspace = true }
+
+# Hashing & Checksums
+sha1 = "0.10"
+sha2 = "0.10"
+sha3 = "0.10"
+md-5 = "0.10"
+ripemd = "0.1"
+blake2 = "0.10"
+blake3 = "1.6"
+crc32fast = "1.4"
+adler = "1.0"
+twox-hash = "2.1"
+murmur3 = "0.5"
+
+# Password Hashing & KDF
+argon2 = "0.5"
+bcrypt = "0.17"
+scrypt = "0.11"
+pbkdf2 = "0.12"
+hkdf = "0.12"
+hmac = "0.12"
+
+# Symmetric Ciphers
+aes = "0.8"
+aes-gcm = "0.10"
+cbc = "0.1"
+ctr = "0.9"
+chacha20poly1305 = "0.10"
+des = "0.8"
+blowfish = "0.9"
+twofish = "0.7"
+rc4 = "0.1"
+
+# Asymmetric & PKI
+rsa = { version = "0.9", features = ["pem"] }
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+p256 = { version = "0.13", features = ["ecdh", "ecdsa", "pem"] }
+p384 = { version = "0.13", features = ["ecdh", "ecdsa", "pem"] }
+k256 = { version = "0.13", features = ["ecdsa", "pem"] }
+x509-parser = "0.17"
+der-parser = "10.0"
+jsonwebtoken = "9.3"
+
+# PRNG & Entropy
+rand = "0.8"
+rand_core = "0.6"
+subtle = "2.6"
+
+[dev-dependencies]
+tokio = { workspace = true }
