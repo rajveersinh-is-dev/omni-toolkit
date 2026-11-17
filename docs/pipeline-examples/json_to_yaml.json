@@ -1,0 +1,16 @@
+{
+  "id": "json_to_yaml",
+  "name": "JSON to YAML Structured Transpiler",
+  "description": "Transcodes JSON configuration payloads into formatted YAML specifications",
+  "nodes": [
+    {
+      "id": "transpile_step",
+      "operation_id": "transpile.structured",
+      "config": {
+        "from": "json",
+        "to": "yaml"
+      }
+    }
+  ],
+  "edges": []
+}

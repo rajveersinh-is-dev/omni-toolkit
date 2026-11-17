@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin_name: omni
+            tui_name: omni-tui
+            archive_ext: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            bin_name: omni
+            tui_name: omni-tui
+            archive_ext: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin_name: omni.exe
+            tui_name: omni-tui.exe
+            archive_ext: zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build release binaries
+        run: cargo build --release --target ${{ matrix.target }} -p omni -p omni-tui
+
+      - name: Package Linux / macOS Release Assets
+        if: matrix.os != 'windows-latest'
+        run: |
+          mkdir -p staging
+          cp target/${{ matrix.target }}/release/${{ matrix.bin_name }} staging/
+          cp target/${{ matrix.target }}/release/${{ matrix.tui_name }} staging/
+          cp README.md LICENSE CHANGELOG.md staging/
+          cd staging
+          tar -czvf ../omni-${{ github.ref_name }}-${{ matrix.target }}.tar.gz *
+          cd ..
+          shasum -a 256 omni-${{ github.ref_name }}-${{ matrix.target }}.tar.gz > omni-${{ github.ref_name }}-${{ matrix.target }}.tar.gz.sha256
+
+      - name: Package Windows Release Assets
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path staging
+          Copy-Item target/${{ matrix.target }}/release/${{ matrix.bin_name }} staging/
+          Copy-Item target/${{ matrix.target }}/release/${{ matrix.tui_name }} staging/
+          Copy-Item README.md, LICENSE, CHANGELOG.md staging/
+          Compress-Archive -Path staging/* -DestinationPath omni-${{ github.ref_name }}-${{ matrix.target }}.zip
+          $hash = (Get-FileHash -Path omni-${{ github.ref_name }}-${{ matrix.target }}.zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  omni-${{ github.ref_name }}-${{ matrix.target }}.zip" | Out-File -FilePath omni-${{ github.ref_name }}-${{ matrix.target }}.zip.sha256 -Encoding ascii
+
+      - name: Upload Release Artifacts
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            omni-${{ github.ref_name }}-${{ matrix.target }}.*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

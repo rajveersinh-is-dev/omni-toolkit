@@ -1,0 +1,23 @@
+{
+  "id": "hash_and_hex",
+  "name": "SHA-256 Hash and Base16 Encoding",
+  "description": "Calculates SHA-256 digest of input and encodes the resulting raw digest to hexadecimal format",
+  "nodes": [
+    {
+      "id": "step1_hash",
+      "operation_id": "crypto.hash.sha256",
+      "config": {}
+    },
+    {
+      "id": "step2_encode",
+      "operation_id": "encode.base16",
+      "config": {}
+    }
+  ],
+  "edges": [
+    {
+      "from_node": "step1_hash",
+      "to_node": "step2_encode"
+    }
+  ]
+}

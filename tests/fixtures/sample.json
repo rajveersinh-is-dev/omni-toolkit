@@ -1,0 +1,10 @@
+{
+  "service": "omni-backend",
+  "port": 8080,
+  "features": [
+    "pipeline",
+    "forensics",
+    "cryptography"
+  ],
+  "enabled": true
+}
