@@ -1,6 +1,21 @@
 [package]
 name = "omni-network"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+description = "Socket tools, authorized lab scanner, DNS power suite (UDP/TCP/DoH), HTTP/cURL studio, and CIDR/VLSM calculator for OMNI"
+authors = ["Rajveersinh Pardeshi <daveaddams91@gmail.com>"]
+license = "MIT OR Apache-2.0"
 
 [dependencies]
+omni-core = { workspace = true }
+omni-registry = { workspace = true }
+omni-security = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+hex = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
