@@ -5,9 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OMNI — Universal Digital Engineering Toolkit</title>
   <link rel="stylesheet" href="styles/main.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <div id="app" class="app-container">
@@ -19,7 +16,7 @@
           <span class="logo-text">OMNI</span>
           <span class="logo-badge">ENGINEERING SUITE</span>
         </div>
-        <nav class="nav-tabs">
+        <nav class="nav-tabs" aria-label="Primary Navigation">
           <button class="nav-tab active" data-view="workbench">Workbench</button>
           <button class="nav-tab" data-view="pipeline">Pipeline Studio</button>
           <button class="nav-tab" data-view="jobs">Job Monitor</button>
@@ -28,17 +25,17 @@
       </div>
 
       <div class="header-center">
-        <div class="command-palette-trigger" id="cmd-trigger">
+        <button class="command-palette-trigger" id="cmd-trigger" type="button">
           <span class="search-icon">&#128269;</span>
           <span class="trigger-text">Search operations, tools, codecs...</span>
           <kbd class="shortcut-kbd">Ctrl+K</kbd>
-        </div>
+        </button>
       </div>
 
       <div class="header-right">
-        <div class="status-indicator online" id="status-pill">
+        <div class="status-indicator offline" id="status-pill">
           <span class="dot"></span>
-          <span class="status-text">Backend Connected (64 Ops)</span>
+          <span class="status-text">Connecting...</span>
         </div>
         <button class="icon-button" id="theme-toggle" title="Toggle Light/Dark Theme">&#9790;</button>
       </div>
@@ -48,49 +45,44 @@
     <main class="app-main">
       <!-- VIEW 1: WORKBENCH -->
       <section id="view-workbench" class="view-panel active">
-        <!-- Sidebar -->
         <aside class="sidebar">
           <div class="sidebar-search">
-            <input type="text" id="op-filter" placeholder="Filter categories & tools...">
+            <input type="text" id="op-filter" placeholder="Filter categories & tools..." aria-label="Filter operations">
           </div>
-          <div class="category-tree" id="category-tree">
-            <!-- Dynamically populated categories -->
-          </div>
+          <div class="category-tree" id="category-tree"></div>
         </aside>
 
-        <!-- Workbench Content Area -->
         <section class="workbench-content">
-          <!-- Active Operation Header -->
           <div class="operation-header" id="op-header">
             <div class="op-title-row">
               <h2 id="op-name">Select an Operation</h2>
               <div class="op-badges" id="op-badges"></div>
             </div>
             <p id="op-desc" class="op-description">Choose a tool from the categories on the left to begin.</p>
+            <div id="op-limitations" class="op-limitations" style="display:none;"></div>
           </div>
 
-          <!-- Configuration Panel -->
           <div class="op-config-panel" id="op-config-panel">
             <div class="panel-header">
               <span>Configuration & Parameters</span>
             </div>
-            <div class="config-form" id="config-form">
-              <!-- Dynamically populated configs -->
-            </div>
+            <div class="config-form" id="config-form"></div>
           </div>
 
-          <!-- Workspace Split: Input & Output -->
           <div class="workspace-split">
-            <!-- Input Card -->
             <div class="io-card input-card">
               <div class="io-header">
                 <span class="io-title">Input Buffer</span>
                 <div class="io-actions">
-                  <label class="file-upload-btn" title="Load file">
+                  <select id="input-mode" class="btn-sm" aria-label="Input encoding mode">
+                    <option value="text">Text (UTF-8)</option>
+                    <option value="hex">Bytes (Hex)</option>
+                  </select>
+                  <label class="file-upload-btn" title="Load local file">
                     Upload File
                     <input type="file" id="file-input" style="display:none;">
                   </label>
-                  <button class="btn-sm" id="clear-input">Clear</button>
+                  <button class="btn-sm" id="clear-input" type="button">Clear</button>
                 </div>
               </div>
               <div class="drop-zone" id="drop-zone">
@@ -98,23 +90,22 @@
               </div>
             </div>
 
-            <!-- Execution Action Bar -->
             <div class="execution-bar">
-              <button class="btn-primary" id="run-btn">
+              <button class="btn-primary" id="run-btn" type="button">
                 <span class="btn-icon">&#9658;</span> Execute Operation
               </button>
+              <button class="btn-secondary" id="cancel-run-btn" type="button" style="display:none;">Cancel</button>
               <div class="exec-metrics" id="exec-metrics">Ready</div>
             </div>
 
-            <!-- Output Card -->
             <div class="io-card output-card">
               <div class="io-header">
                 <span class="io-title">Output Inspector</span>
                 <div class="io-actions">
-                  <button class="btn-sm active" id="view-text-btn">Text</button>
-                  <button class="btn-sm" id="view-hex-btn">Hex Dump</button>
-                  <button class="btn-sm" id="copy-output-btn">Copy</button>
-                  <button class="btn-sm" id="download-output-btn">Download</button>
+                  <button class="btn-sm active" id="view-text-btn" type="button">Text</button>
+                  <button class="btn-sm" id="view-hex-btn" type="button">Hex Dump</button>
+                  <button class="btn-sm" id="copy-output-btn" type="button">Copy</button>
+                  <button class="btn-sm" id="download-output-btn" type="button">Download</button>
                 </div>
               </div>
               <div class="output-viewer" id="output-viewer">
@@ -131,20 +122,28 @@
         <div class="pipeline-studio-container">
           <div class="pipeline-sidebar">
             <div class="pipeline-actions">
-              <button class="btn-primary" id="run-pipeline-btn">&#9658; Run Pipeline</button>
-              <button class="btn-secondary" id="save-pipeline-btn">Save</button>
-              <button class="btn-secondary" id="export-pipeline-btn">Export JSON</button>
+              <button class="btn-primary" id="run-pipeline-btn" type="button">&#9658; Run</button>
+              <button class="btn-secondary" id="validate-pipeline-btn" type="button">Validate</button>
+              <button class="btn-secondary" id="save-pipeline-btn" type="button">Save</button>
+              <button class="btn-secondary" id="export-pipeline-btn" type="button">Export JSON</button>
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+              <label for="pipeline-name-input">Pipeline Name</label>
+              <input type="text" id="pipeline-name-input" value="Interactive Pipeline" class="input-field">
             </div>
             <h3>Pipeline Stages</h3>
             <div class="pipeline-stages-list" id="pipeline-stages-list"></div>
-            <button class="btn-dashed" id="add-stage-btn">+ Add Next Stage</button>
+            <button class="btn-dashed" id="add-stage-btn" type="button">+ Add Selected Operation</button>
+            <h3 style="margin-top:16px;">Saved Pipelines</h3>
+            <div class="pipeline-stages-list" id="saved-pipelines-list"></div>
           </div>
           <div class="pipeline-canvas" id="pipeline-canvas">
             <div class="canvas-instructions">
               <h3>Interactive DAG Pipeline Builder</h3>
-              <p>Chain operations into high-throughput processing pipelines with verified type contracts.</p>
+              <p>Chain operations into typed, validated DAG pipelines and inspect per-node timings and outputs.</p>
             </div>
             <div id="pipeline-graph" class="pipeline-graph"></div>
+            <pre id="pipeline-output-pre" class="code-output" style="margin-top:16px; min-height:140px;">Pipeline execution results will appear here.</pre>
           </div>
         </div>
       </section>
@@ -152,7 +151,10 @@
       <!-- VIEW 3: JOB MONITOR -->
       <section id="view-jobs" class="view-panel">
         <div class="job-monitor-container">
-          <h2>Active Tasks & Execution History</h2>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h2>Active Tasks & Execution History</h2>
+            <button class="btn-secondary" id="refresh-jobs-btn" type="button">Refresh History</button>
+          </div>
           <table class="jobs-table" id="jobs-table">
             <thead>
               <tr>
@@ -161,11 +163,11 @@
                 <th>Status</th>
                 <th>Created At</th>
                 <th>Duration</th>
-                <th>Details</th>
+                <th>Action / Details</th>
               </tr>
             </thead>
             <tbody id="jobs-tbody">
-              <tr><td colspan="6">No recent jobs executed.</td></tr>
+              <tr><td colspan="6">Loading job history...</td></tr>
             </tbody>
           </table>
         </div>
@@ -177,21 +179,35 @@
           <h2>Platform Settings & Diagnostics</h2>
           <div class="settings-group">
             <h3>Local Processing Guarantee</h3>
-            <p>OMNI is operating in <strong>Local-First Mode</strong>. Zero files or secrets are transmitted externally.</p>
+            <p>OMNI operates in <strong>Local-First Mode</strong>. No external telemetry, fonts, or file uploads are performed.</p>
           </div>
           <div class="settings-group">
-            <h3>Backend Endpoint</h3>
-            <input type="text" id="settings-endpoint" value="http://127.0.0.1:8080" class="input-field">
+            <h3>Backend Endpoint & Auth Token</h3>
+            <label for="settings-endpoint">API Base URL</label>
+            <input type="text" id="settings-endpoint" class="input-field">
+            <label for="settings-token" style="margin-top:8px; display:block;">Session / Bearer Token (optional)</label>
+            <input type="password" id="settings-token" placeholder="Auto-populated in native desktop mode" class="input-field">
+            <button class="btn-primary" id="save-settings-btn" type="button" style="margin-top:10px;">Apply & Reconnect</button>
+            <span id="settings-status" style="margin-left:10px; font-size:12px; color:var(--text-secondary);"></span>
           </div>
           <div class="settings-group">
-            <h3>Resource Limits</h3>
-            <label>Max Memory per Job: <strong>512 MB</strong></label>
-            <label>Max Decompression Ratio: <strong>100x (Zip Bomb Protection)</strong></label>
-            <label>Network Scope Default: <strong>Strict Loopback & Private Subnets</strong></label>
+            <h3>Runtime Resource Limits</h3>
+            <label>Max API Request Body: <strong>16 MB</strong></label>
+            <label>Max Decompression Ratio: <strong>100x (500 MB cap)</strong></label>
+            <label>Network Scope Default: <strong>Loopback & RFC 1918 Private Subnets</strong></label>
           </div>
         </div>
       </section>
     </main>
+  </div>
+
+  <!-- Command Palette Modal -->
+  <div id="cmd-modal" class="cmd-modal" style="display:none;" role="dialog" aria-modal="true" aria-label="Command Palette">
+    <div class="cmd-modal-backdrop" id="cmd-backdrop"></div>
+    <div class="cmd-modal-content">
+      <input type="text" id="cmd-input" class="cmd-input" placeholder="Type an operation ID, name, or category..." autocomplete="off">
+      <div id="cmd-results" class="cmd-results"></div>
+    </div>
   </div>
 
   <script src="src/app.js"></script>

@@ -599,3 +599,114 @@ body {
 .jobs-table tr:hover {
   background-color: var(--bg-tertiary);
 }
+
+/* Command Palette Modal & Status Badges */
+.cmd-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 80px;
+}
+
+.cmd-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.cmd-modal-content {
+  position: relative;
+  z-index: 1001;
+  width: 560px;
+  max-width: 92vw;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+}
+
+.cmd-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: none;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+}
+
+.cmd-results {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.cmd-result-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 13px;
+}
+
+.cmd-result-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.op-limitations {
+  margin-top: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  border-left: 3px solid var(--accent-yellow);
+  color: var(--text-secondary);
+}
+
+.badge.status-verified, .badge.status-completed {
+  background: rgba(35, 134, 54, 0.2);
+  color: #3fb950;
+}
+
+.badge.status-experimental, .badge.status-running, .badge.status-queued {
+  background: rgba(210, 153, 34, 0.2);
+  color: #d29922;
+}
+
+.badge.status-unsupported, .badge.status-failed, .badge.status-timed_out, .badge.status-cancelled {
+  background: rgba(248, 81, 73, 0.2);
+  color: #f85149;
+}
+
+.drop-zone.drag-over {
+  outline: 2px dashed var(--accent-blue);
+  background: rgba(47, 129, 247, 0.08);
+}
+
+.pipeline-graph {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.pipeline-node-card {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--accent-blue);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.pipeline-arrow {
+  color: var(--text-secondary);
+  font-weight: bold;
+}

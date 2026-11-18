@@ -16,14 +16,25 @@ omni-crypto = { workspace = true }
 omni-text = { workspace = true }
 omni-pcap = { workspace = true }
 omni-filesystems = { workspace = true }
+omni-media = { workspace = true }
+omni-network = { workspace = true }
+omni-api = { workspace = true }
+omni-storage = { workspace = true }
+omni-workers = { workspace = true }
 omni-visualization = { workspace = true }
 omni-testkit = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 serde_json = { workspace = true }
+tower = { workspace = true }
+axum = { workspace = true }
 
 [[test]]
 name = "integration_pipeline"
 path = "integration/pipeline_test.rs"
+
+[[test]]
+name = "cli_end_to_end"
+path = "integration/cli_e2e_test.rs"
 
 [[test]]
 name = "security_sandboxing"

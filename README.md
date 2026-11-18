@@ -4,20 +4,28 @@
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-1.80%2B-orange.svg)](https://www.rust-lang.org)
 
-**OMNI** is a high-performance, local-first engineering multitool for developers, systems engineers, security researchers, and digital forensics practitioners. It combines the practical capabilities of tools like CyberChef, Wireshark, FFmpeg, jq, Pandoc, Binwalk, Capstone, and DuckDB into a unified, typed, composable engineering platform.
+**OMNI** is a local-first, Rust-powered developer, security, and digital forensics engineering platform with a typed concurrent DAG pipeline engine, an Axum REST/WebSocket backend, and three interfaces (CLI, TUI, and Desktop/Web GUI).
 
 ---
 
-## Key Highlights
+## Core Architectural Pillars
 
-- **Rust-First Architecture**: High throughput, memory safety, and native concurrency without garbage collection pauses.
-- **Local-First & Zero-Trust**: All processing runs locally on your workstation. Sensitive tokens, private keys, and PCAP streams never leave your machine.
-- **Typed Pipeline Engine**: Construct, validate, and execute directed acyclic graphs (DAGs) across heterogeneous data types (Streams, Buffers, JSON, Files).
-- **Three Unified Interfaces**:
-  1. **CLI (`omni`)**: Optimized for standard UNIX pipe workflows (`cat input | omni ...`).
-  2. **TUI (`omni-tui`)**: Interactive, keyboard-driven terminal dashboard powered by Ratatui.
-  3. **Desktop & Web GUI**: Modern reactive interface with visual DAG pipeline builder, hex inspector, and real-time WebSocket job streaming.
-- **Deterministic Implementations**: Zero mock stubs, synthetic benchmarks, or precalculated tables. Every algorithm is executed directly from first principles or verified standards.
+1. **Unified Processing & Concurrent DAG Pipeline Engine (`omni-core`, `omni-pipeline`)**:
+   - Strongly typed `DataPayload` contract (`Text`, `Bytes`, `Json`, `FileRef`, `Multi`).
+   - Dependency-aware concurrent DAG scheduler (`JoinSet` + bounded `Semaphore` concurrency) with deterministic multi-parent input assembly (`BTreeMap` keyed by port or parent ID), static edge type-compatibility checking, cycle/duplicate-edge rejection, and immediate cancellation propagation.
+   - Bounded async chunk streaming (`spawn_chunk_producer`, `spawn_stream_stage`) with explicit backpressure.
+   - Per-node execution observability (`PipelineExecutionReport`: execution ID, timestamps, durations, output sizes, and statuses).
+
+2. **Hardened Local-First Backend (`omni-api`, `omni-workers`, `omni-storage`, `omni-security`)**:
+   - **API Security**: Strict configurable CORS allowlist (defaults to loopback origins), optional Bearer/`X-Omni-Token` authentication (enforced when binding to non-loopback addresses), 16 MB request body limit, bounded timeouts, and sanitized error responses.
+   - **WebSocket Isolation**: Supports per-job subscriptions (`/api/v1/ws/jobs?job_id=<id>`), token validation, connection limits, and lag handling.
+   - **Worker Lifecycle**: Explicit `JobStatus` state transitions (`queued` -> `running` -> `completed` | `failed` | `cancelled` | `timed_out`), immediate cancellation + task abort on timeout, panic isolation, SQLite WAL persistence, and startup recovery of interrupted jobs.
+   - **Filesystem & Resource Safety**: Canonical symlink-escape prevention (`safe_join`, `safe_join_no_symlinks`), atomic `create_new` writes, overflow-safe decompression bomb limits (100x / 500 MB), and secret/path redaction.
+
+3. **Three Interfaces (`apps/cli`, `apps/tui`, `apps/desktop`, `frontend/`)**:
+   - **CLI (`omni`)**: UNIX stdin/stdout filter workflows, category/status/tag filtering, machine-readable JSON & inventory export, and pipeline validation/execution.
+   - **TUI (`omni-tui`)**: Keyboard-driven Ratatui terminal studio with interactive input editing, category browsing, and fuzzy search.
+   - **Desktop & Local Web UI (`omni-desktop` + `frontend/`)**: Local-first HTML/JS frontend served directly by the Axum backend (zero external CDN/font requests), with optional native OS window via `--features native-webview` (`tao` + `wry`) bound to an ephemeral loopback port with a per-launch session token and strict origin navigation lock.
 
 ---
 
@@ -26,31 +34,18 @@
 ```mermaid
 graph TD
     subgraph Interfaces ["Triple Interface Layer"]
-        CLI["CLI (Clap / UNIX Pipes)"]
-        TUI["TUI Studio (Ratatui)"]
-        GUI["Desktop Shell (Wry) & Web UI"]
+        CLI["CLI (apps/cli - Clap)"]
+        TUI["TUI Studio (apps/tui - Ratatui)"]
+        GUI["Desktop Shell (apps/desktop - Wry/Tao) & Web UI (frontend/)"]
     end
 
     subgraph CoreEngine ["OMNI Processing Core"]
-        API["Axum REST & WebSocket Server"]
-        Workers["Job Manager & Worker Pool"]
-        Pipeline["DAG Pipeline Engine & Validator"]
-        Registry["Central Operation Registry"]
-        Security["Security Sandbox & Resource Limits"]
-        Storage["SQLite Persistence & Ephemeral Storage"]
-    end
-
-    subgraph ToolSuites ["Functional Tool Suites (64 Operational Tools)"]
-        C1["Encoders & Ciphers"]
-        C2["Cryptography & Hashes"]
-        C3["Text & Code Analysis"]
-        C4["Documents & PDF Forensics"]
-        C5["Media & 3D Processing"]
-        C6["Networking & PCAP Dissection"]
-        C7["Binary Analysis & Hardware"]
-        C8["Storage & Filesystems"]
-        C9["Cloud & Container Forensics"]
-        C10["AI, Tensors & System Diag"]
+        API["omni-api (Axum REST, Auth, CORS, Isolated WS, Static UI)"]
+        Workers["omni-workers (JobManager, Semaphore, Timeouts, Cancel)"]
+        Pipeline["omni-pipeline (Concurrent DAG, Multi-Input, Bounded Streams)"]
+        Registry["omni-registry (132 Registered Ops + Feature Inventory)"]
+        Security["omni-security (Symlink Guard, Bomb Limits, Redaction)"]
+        Storage["omni-storage (SQLite WAL Persistence)"]
     end
 
     CLI --> Registry
@@ -60,164 +55,139 @@ graph TD
     API --> Workers
     Workers --> Pipeline
     Pipeline --> Registry
-    Registry --> ToolSuites
     Pipeline --> Security
     Workers --> Storage
 ```
 
 ---
 
-## Tool Catalogue (All 10 Categories)
+## Registered Operations & Honest Feature Status
 
-### 1. Encoders & Ciphers
-- **`encode.base16` / `base32` / `base45` / `base58` / `base62` / `base64` / `base85` / `base91`**: Universal radix encoding with strict validation.
-- **`encode.url` / `punycode` / `html_entities` / `quoted_printable` / `unicode_escapes` / `octal_escapes`**: Complete web and text serialization converters.
+OMNI currently registers **132 operations** across 10 engineering categories. The exact, machine-generated status inventory is maintained in [docs/feature-inventory.json](docs/feature-inventory.json) and [TRACEABILITY_MATRIX.md](TRACEABILITY_MATRIX.md):
 
-### 2. Cryptography & Key Derivation
-- **Classical Ciphers**: ROT5/13/18/47, Atbash, Affine, Vigenère, Morse, and authentic Enigma (M3/Reflector B) simulation.
-- **Cryptographic Hashes**: MD5, SHA-1, RIPEMD-160, SHA-2 (224/256/384/512), SHA-3, SHAKE128/256, BLAKE2s/2b, BLAKE3, xxHash, MurmurHash3.
-- **Checksums**: CRC8, CRC16, CRC32 (IEEE / Castagnoli), CRC64, Adler-32, Fletcher-16/32.
-- **KDF & Password Hashing**: Argon2d/i/id, bcrypt, scrypt, PBKDF2, HKDF.
-- **Symmetric & Asymmetric**: AES-128/256-GCM, ChaCha20-Poly1305, RC4, RSA (OAEP), Ed25519 signatures.
-- **Post-Quantum Cryptography**: NIST FIPS 203/204/205 (ML-KEM, ML-DSA, SPHINCS+, Falcon specifications).
-- **PKI & JWT**: X.509 certificate inspector (SANs, validity, issuer), JWT debugger & tamper tester.
+| Status | Count | Meaning |
+|---|---:|---|
+| `verified` | 17 | Verified against dedicated unit, security, or end-to-end tests |
+| `implemented` | 112 | Working implementation compiled and registered across interfaces |
+| `experimental` | 2 | Requires optional host binaries (`media.transcode` -> `ffmpeg`; `pdf.ocr` OCR mode -> `tesseract`) |
+| `unsupported` | 1 | Explicitly unsupported (`crypto.pqc.falcon` — returns clear error; use FIPS 203/204/205 ops instead) |
+| **Total** | **132** | Generated directly via `omni --json inventory` |
 
-### 3. Text & Code Engineering
-- **`transpile.structured`**: Bidirectional transcoding between JSON, YAML, TOML, CSV, and TSV.
-- **`text.diff`**: Myers diff algorithm with character-, word-, and line-level delta reporting.
-- **`text.regex_studio`**: Regular expression testing with syntax breakdown and ReDoS detection.
-- **`text.string_transformers`**: Multi-case conversion, slugification, deduplication, and Soundex phonetics.
-- **`code.ast_analysis`**: Syntax tree symbol extraction, function inventories, and minification.
-- **`code.deobfuscator`**: Dean Edwards unpacker, hex escape resolution, and identifier normalization.
-
-### 4. Documents & PDF Forensics
-- **`doc.transcode`**: Markdown, LaTeX, and roff man page generation.
-- **`doc.fonts`**: OpenType / TrueType font table parser, ascender/descender metrics, and glyph counters.
-- **`doc.math`**: TeX math typesetting to SVG.
-- **`doc.diagram_compiler`**: Mermaid and Graphviz DOT diagram compilation into SVG vectors.
-- **`pdf.multitool`**: Page splitting, merging, rotation, and AcroForm field extraction.
-- **`pdf.internals`**: Object dictionary hierarchy and FlateDecode stream decompression.
-- **`pdf.scrubber`**: Irreversible metadata sanitization (stripping `/Info` and XML `/Metadata`).
-- **`pdf.ocr`**: Layout analysis, line segmentation, and bounding box approximation.
-
-### 5. Media, Audio & 3D Processing
-- **`media.probe`**: ISO MP4/MOV atom parser, Matroska EBML reader, and RIFF/WAV inspector.
-- **`media.transcode`**: Production FFmpeg command synthesis with hardware acceleration (NVENC, VAAPI, VideoToolbox).
-- **`audio.lufs`**: EBU R128 and ITU-R BS.1770-4 loudness metering, true-peak calculation (dBTP).
-- **`audio.silence`**: Sliding RMS power analysis and silence passage segmentation.
-- **`audio.waveform`**: Peak downsampling and zero-crossing rate computation.
-- **`image.pipeline`**: Multi-format image conversion (PNG, JPEG, WebP, BMP, QOI), crop, resize, rotate.
-- **`image.color_space`**: sRGB, CIE 1931 XYZ, CIELAB, CIELCh, and Delta-E 2000 calculations.
-- **`image.metadata`**: EXIF, IPTC, and XMP marker extraction and irreversible scrubbing.
-- **`geo3d.inspect`**: Wavefront OBJ and STL geometry analysis: bounding box, vertex/face count, surface area.
-- **`geo3d.shader`**: GLSL and WGSL shader syntax and uniform buffer inspector.
-
-### 6. Networking & PCAP Deep Packet Inspection
-- **`net.socket`**: TCP/UDP loopback echo tester, latency and jitter analyzer.
-- **`net.scanner`**: Authorized private lab scanner (strictly scoped to loopback and RFC 1918 subnets) and Wake-on-LAN generator.
-- **`net.dns`**: RFC 1035 DNS wire packet builder and resolver (A, AAAA, MX, TXT, CNAME).
-- **`net.http_client`**: cURL command parser and code generator for Rust (`reqwest`), Python (`httpx`), Go, and Node.js.
-- **`net.ip_calc`**: IPv4/IPv6 CIDR subnet calculator, VLSM splitter, and in-addr.arpa reverse DNS.
-- **`pcap.dissect`**: Dissector for Ethernet, IPv4, TCP, UDP, ICMP, ARP, DNS, TLS, and HTTP with display filtering.
-- **`pcap.reassemble`**: TCP stream reassembly, sequence gap detection, and application payload carver.
-
-### 7. Binary Analysis & Firmware
-- **`binary.hex`**: Hex editor, binary diffing, byte swapping, and bitwise operations.
-- **`binary.ieee754`**: 32-bit single and 64-bit double precision float bit visualizer.
-- **`binary.executable`**: ELF, PE, Mach-O, and WASM parser with checksec security analysis (ASLR, DEP/NX, Stack Canary, RELRO).
-- **`binary.disasm`**: Multi-architecture disassembler with basic block detection and Mermaid CFG export.
-- **`hardware.serial`**: UART 8-N-1 and 7-E-1 parity verification and framing simulator.
-- **`hardware.can`**: Linux candump parser with standard OBD-II diagnostic PID decoding (RPM, Speed, Temp).
-- **`firmware.extract`**: Binwalk-compatible signature scanner (SquashFS, CramFS, JFFS2, U-Boot, gzip) and block entropy mapper.
-
-### 8. Storage & Filesystems
-- **`storage.sql`**: In-memory analytical SQL engine querying CSV, TSV, and tabular data via SQLite.
-- **`storage.binary_formats`**: Schema-less Protobuf wire format decoder, MessagePack viewer, and ASN.1 DER parser.
-- **`archive.toolkit`**: Safe ZIP, TAR, and GZIP creation/extraction with 100:1 ratio and 500MB bomb protection.
-- **`fs.forensics`**: MBR partition table parser, GPT header reader, and ext2/3/4 superblock analyzer.
-
-### 9. Cloud, Infrastructure & DevOps
-- **`cloud.container`**: Dockerfile linter (CIS benchmarks) and daemonless OCI/Docker tarball layer bloat audit.
-- **`cloud.iac`**: Kubernetes manifest security auditor (privileged containers, host namespaces, RBAC), Terraform plan JSON analyzer, and AWS/GCP IAM policy simulator.
-
-### 10. AI, Tensors & System Diagnostics
-- **`ai.model_inspect`**: GGUF and Safetensors header parser, parameter counts, and VRAM inference estimator.
-- **`ai.tokenizer`**: Subword token boundary highlighter with visual colorization and compression ratios.
-- **`ai.vector`**: Cosine similarity, Euclidean (L2), Manhattan (L1), Chebyshev, and Top-K nearest neighbor search.
-- **`ai.quantize`**: INT8, INT4, and BF16 quantization simulation with MSE, RMSE, SNR, and PSNR metrics.
-- **`system.trace`**: strace and eBPF log analyzer with syscall latency percentiles and file descriptor leak detection.
-- **`system.cron`**: 5-field cron parser, human description generator, and next 20 execution timestamps.
-- **`system.ids`**: UUID (v4/v7), ULID generator, and 64-bit Snowflake ID decoder.
-- **`system.color`**: WCAG 2.1 contrast ratio checker and color blindness simulator (Protanopia/Deuteranopia).
-- **`system.flamegraph`**: Folded stack trace parser and interactive vector SVG flamegraph generator.
+### Highlights of Verified Capabilities
+- **Post-Quantum Cryptography (Pure Rust)**: Real NIST FIPS 203 (`crypto.pqc.ml_kem`: ML-KEM-768 keygen/encapsulate/decapsulate), FIPS 204 (`crypto.pqc.ml_dsa`: ML-DSA-65 keygen/sign/verify), and FIPS 205 (`crypto.pqc.sphincs_plus`: SLH-DSA-SHA2-128f keygen/sign/verify).
+- **Binary & Disassembly**: Full x86-16/32/64 instruction decoding and Mermaid/JSON CFG generation via `iced-x86`, plus ELF/PE/Mach-O/WASM checksec inspection via `goblin`.
+- **AI & Tokenization**: Authentic BPE tokenization (`cl100k_base`, `o200k_base`, `p50k_base`, `r50k_base`) via `tiktoken-rs`, GGUF/Safetensors header inspection, vector metrics, and quantization precision metrics.
+- **Documents & Diagrams**: Real offline Mermaid flowchart & Graphviz DOT SVG compiler, recursive LaTeX-subset math parser (MathML & SVG), Markdown transpiler, and PDF internals/metadata scrubber.
+- **Networking, PCAP & Forensics**: RFC 1035 DNS wire encoder/decoder (with pointer-cycle guard & scoped resolver), quote-aware cURL-to-Rust/Python/Go/Node codegen, PCAP/PCAPNG dissector & TCP stream reassembler, read-only SQLite CSV/JSON analytics, and bomb-guarded ZIP/TAR/GZIP inspection.
 
 ---
 
-## Quickstart
+## Prerequisites & Build
 
-### 1. Build and Run Tests
+- **Rust toolchain**: 1.80+ (`rustup`)
+- **Optional external tools**:
+  - `ffmpeg` on `PATH` (for `media.transcode` execution mode; `mode="plan"` works offline without FFmpeg).
+  - `tesseract` on `PATH` (for `pdf.ocr` optical recognition on raster images; embedded PDF text extraction works offline via `lopdf`).
+  - On Linux, building `omni-desktop --features native-webview` requires GTK3/WebKit2GTK development headers.
+
 ```bash
-# Clone the repository
+# Clone
 git clone https://github.com/rajveersinh-is-dev/omni-toolkit.git
 cd omni-toolkit
 
-# Run full test suite (100% pass across all crates)
+# Run full workspace tests (all 30 crates)
 cargo test --workspace
 
-# Verify linting
-cargo clippy --all-targets -- -D warnings
+# Verify zero Clippy warnings
+cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-### 2. Using the CLI
+---
+
+## Quickstart Examples (Verified)
+
+### 1. CLI Operations & Filtering
 ```bash
-# List all 64 registered tools
+# List all registered operations
 cargo run -p omni -- list
 
-# Hash a string with SHA-256
-echo "Hello OMNI" | cargo run -p omni -- run crypto.hash.sha256
+# Filter by category and keyword
+cargo run -p omni -- list --category Encoders --query base64
 
-# Transcode JSON to YAML
-echo '{"service":"api","port":8080}' | cargo run -p omni -- run transpile.structured --config '{"from":"json","to":"yaml"}'
+# Export machine-readable feature inventory
+cargo run -p omni -- --json inventory
 
-# Calculate CIDR subnets
-cargo run -p omni -- run net.ip_calc --config '{"cidr":"10.0.0.0/24","split_to_prefix":26}'
+# Base64 encode from stdin
+echo -n "hello omni" | cargo run -p omni -- encode base64
 
-# Decode Protobuf wire stream
-cargo run -p omni -- run storage.binary_formats --config '{"format":"protobuf"}' < message.pb
+# Run real FIPS 203 ML-KEM-768 keygen + encapsulation + decapsulation roundtrip
+cargo run -p omni -- run crypto.pqc.ml_kem --config '{"action":"roundtrip"}'
+
+# Validate and execute a DAG pipeline with full JSON execution report
+cargo run -p omni -- pipeline validate docs/pipeline-examples/hash_and_hex.json
+cargo run -p omni -- --json pipeline run docs/pipeline-examples/hash_and_hex.json tests/fixtures/sample.json
 ```
 
-### 3. Launching the Interactive TUI Studio
+### 2. Local Web API & Browser Studio
+```bash
+# Loopback local mode (serves frontend/ at http://127.0.0.1:8080/)
+cargo run -p omni -- serve --host 127.0.0.1 --port 8080
+
+# Non-loopback exposure requires explicit bearer token authentication
+cargo run -p omni -- serve --host 0.0.0.0 --port 8080 --auth-token "your-strong-secret"
+```
+
+### 3. Desktop Application
+```bash
+# Headless local web UI server mode (cross-platform default)
+cargo run -p omni-desktop
+
+# Native OS window via Wry + Tao (ephemeral loopback port + per-launch session token)
+cargo run -p omni-desktop --features native-webview
+```
+
+### 4. Interactive TUI Studio
 ```bash
 cargo run -p omni-tui
 ```
-- **[Tab]**: Switch between Categories, Operations, Input, and Output panes.
-- **[Up/Down]**: Navigate lists.
-- **[/]**: Global fuzzy operation search.
-- **[Enter]**: Execute the selected operation.
-- **[q]**: Exit.
 
-### 4. Running the Web API and GUI Server
+---
+
+## Benchmarks
+
+Run the reproducible in-process benchmark suite (`std::time::Instant`, 5 discarded warmup runs, 20 measured iterations over deterministic 1 MB Xorshift payloads):
+
 ```bash
-cargo run -p omni -- serve --host 127.0.0.1 --port 8080
+cargo run --release -p omni-benchmarks
 ```
-Open `http://127.0.0.1:8080` in any browser to access the graphical visual pipeline editor and live monitoring dashboard.
+
+Sample measurement on Windows x86_64 (release profile, Rust stable):
+
+| Operation | Dataset | Warmup / Iters | Mean Latency | Throughput |
+|---|---|---|---:|---:|
+| `crypto.hash.sha256` | 1 MB | 5 / 20 | 947.2 μs | 1055.77 MB/s |
+| `crypto.hash.blake3` | 1 MB | 5 / 20 | 378.1 μs | 2644.63 MB/s |
+| `encode.base64` | 1 MB | 5 / 20 | 895.9 μs | 1116.18 MB/s |
+| `checksum.crc32` | 1 MB | 5 / 20 | 263.5 μs | 3794.56 MB/s |
 
 ---
 
-## Security & Verification Guarantees
+## Known Limitations
 
-1. **Local-First Boundary**: OMNI operates strictly locally by default. Private keys, certificates, and captures are never transmitted off-box.
-2. **Decompression Bomb Protection**: All archive and stream processing enforces strict caps (maximum 100:1 expansion ratio and 500 MB uncompressed threshold).
-3. **Network Target Guard**: Scanning tools are constrained to loopback (`127.0.0.1`, `::1`) and RFC 1918 private subnets.
-4. **Secret Masking**: Sensitive tokens (AWS keys, Bearer tokens, PEM private blocks) are redacted automatically in logs and execution traces.
-5. **No Synthetic Shortcuts**: Zero `panic!()` in code generators, zero unhandled `.unwrap()` in processing pipelines.
+- **Native External Tool Dependencies**: `media.transcode` (execution mode) and `pdf.ocr` (optical OCR) delegate to host `ffmpeg` and `tesseract` executables when present on `PATH`; they return explicit errors rather than synthetic output if unavailable.
+- **Disassembly Scope**: `binary.disasm` supports x86-16, x86-32, and x86-64 via `iced-x86`; ARM/AArch64/RISC-V/MIPS are not yet implemented.
+- **SQL Analytics Engine**: `storage.sql` runs in-memory SQLite over CSV, TSV, and JSON arrays (read-only `SELECT`/`WITH`/`EXPLAIN`); DuckDB and Parquet ingestion are not bundled.
+- **Post-Quantum Falcon**: `crypto.pqc.falcon` is marked `unsupported` until an audited pure-Rust NIST-finalized FN-DSA crate is integrated.
+- **Process Sandboxing**: Worker isolation uses Tokio tasks, semaphores, timeouts, and panic boundaries; OS-level kernel sandboxing (seccomp/AppContainer) is not currently enforced.
 
 ---
+
+## Security & Documentation
+
+- Security architecture & threat model: [SECURITY.md](SECURITY.md) & [docs/security/threat-model.md](docs/security/threat-model.md)
+- Complete feature traceability: [TRACEABILITY_MATRIX.md](TRACEABILITY_MATRIX.md)
+- Tutorials & examples: [docs/tutorials/getting-started.md](docs/tutorials/getting-started.md), [docs/tutorials/pipeline-composition.md](docs/tutorials/pipeline-composition.md), [examples/README.md](examples/README.md)
 
 ## License
 
-Dual-licensed under either of:
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE) or http://opensource.org/licenses/MIT)
-
-at your option.
+Dual-licensed under Apache-2.0 or MIT at your option ([LICENSE](LICENSE)).

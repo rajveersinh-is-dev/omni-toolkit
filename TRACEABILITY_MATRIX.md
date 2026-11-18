@@ -1,185 +1,158 @@
 # OMNI Feature Traceability Matrix
 
-This document tracks every operational capability required by the OMNI specification, ensuring zero phantom stubs, full architectural traceability, and verifiable test coverage.
+Generated directly from `omni --json inventory` (`docs/feature-inventory.json`) so documentation stays synchronized with the compiled registry.
 
 ## Status Definitions
-- `planned`: Specification and interface defined; implementation scheduled.
-- `in_progress`: Implementation actively under development.
-- `experimental`: Functional implementation exists, under active edge-case hardening.
-- `implemented`: Complete working implementation with unit and integration tests.
-- `verified`: Formally verified against test vectors, property tests, or reference implementations.
-- `unsupported`: Documented constraint prevents native execution on specific platform.
+- `planned`: No working implementation exists.
+- `in_progress`: Implementation is incomplete.
+- `experimental`: Works with documented external dependencies or constraints (e.g. host `ffmpeg` or `tesseract`).
+- `implemented`: Real implementation exists and compiles/executes, with baseline test coverage.
+- `verified`: Real implementation verified against dedicated automated unit, security, or end-to-end tests.
+- `unsupported`: Explicitly unsupported (returns clear error rather than simulating behavior).
 
----
+## Summary Counts
 
-## Category 1 — Cryptography, Encoders, Entropy & Secrets
+| Status | Count |
+|---|---:|
+| `experimental` | 2 |
+| `implemented` | 112 |
+| `unsupported` | 1 |
+| `verified` | 17 |
+| **Total Registered Operations** | **132** |
 
-| Op ID | Name | Category / Sub | Crate & Module | Interfaces | Tests | Status |
+## Complete Registered Operation Inventory
+
+| Operation ID | Name | Category | Status | Multi-Input | Security | Limitations |
 |---|---|---|---|---|---|---|
-| `encode.base16` | Base16 (Hex) Encode/Decode | Cat 1A: Encoders | `omni-encoders::base16` | CLI, TUI, GUI, API | `test_base16` | `verified` |
-| `encode.base32` | Base32 (RFC 4648) | Cat 1A: Encoders | `omni-encoders::base32` | CLI, TUI, GUI, API | `test_base32` | `verified` |
-| `encode.base32hex` | Base32Hex (Extended Hex) | Cat 1A: Encoders | `omni-encoders::base32` | CLI, TUI, GUI, API | `test_base32hex` | `verified` |
-| `encode.base45` | Base45 (QR/EU DGC) | Cat 1A: Encoders | `omni-encoders::base45` | CLI, TUI, GUI, API | `test_base45` | `verified` |
-| `encode.base58` | Base58 (Bitcoin / IPFS) | Cat 1A: Encoders | `omni-encoders::base58` | CLI, TUI, GUI, API | `test_base58` | `verified` |
-| `encode.base62` | Base62 Alphanumeric | Cat 1A: Encoders | `omni-encoders::base62` | CLI, TUI, GUI, API | `test_base62` | `verified` |
-| `encode.base64` | Base64 Standard RFC 4648 | Cat 1A: Encoders | `omni-encoders::base64` | CLI, TUI, GUI, API | `test_base64` | `verified` |
-| `encode.base64url` | Base64URL Safe RFC 4648 | Cat 1A: Encoders | `omni-encoders::base64` | CLI, TUI, GUI, API | `test_base64url` | `verified` |
-| `encode.base85` | Base85 / Ascii85 (Adobe/IPv6) | Cat 1A: Encoders | `omni-encoders::base85` | CLI, TUI, GUI, API | `test_base85` | `verified` |
-| `encode.base91` | Base91 Binary Encoder | Cat 1A: Encoders | `omni-encoders::base91` | CLI, TUI, GUI, API | `test_base91` | `verified` |
-| `encode.punycode` | Punycode / IDNA Domain Encoder | Cat 1A: Encoders | `omni-encoders::punycode` | CLI, TUI, GUI, API | `test_punycode` | `verified` |
-| `encode.quoted_printable` | Quoted-Printable (RFC 2045) | Cat 1A: Encoders | `omni-encoders::quoted_printable` | CLI, TUI, GUI, API | `test_qp` | `verified` |
-| `encode.url` | URL Percent Encoding (RFC 3986) | Cat 1A: Encoders | `omni-encoders::url` | CLI, TUI, GUI, API | `test_url` | `verified` |
-| `encode.html_entities` | HTML4/HTML5 Entity Encoder/Decoder | Cat 1A: Encoders | `omni-encoders::html` | CLI, TUI, GUI, API | `test_html` | `verified` |
-| `encode.unicode_escapes` | Unicode Escape Sequences (`\uXXXX`) | Cat 1A: Encoders | `omni-encoders::escapes` | CLI, TUI, GUI, API | `test_escapes` | `verified` |
-| `encode.octal_escapes` | Octal Escape Sequences (`\000`) | Cat 1A: Encoders | `omni-encoders::escapes` | CLI, TUI, GUI, API | `test_escapes` | `verified` |
-| `cipher.morse` | Morse Code Encode / Decode | Cat 1B: Classical | `omni-crypto::classical::morse` | CLI, TUI, GUI, API | `test_morse` | `verified` |
-| `cipher.baudot` | Baudot ITA2 Teleprinter Code | Cat 1B: Classical | `omni-crypto::classical::baudot` | CLI, TUI, GUI, API | `test_baudot` | `verified` |
-| `cipher.tap_code` | Tap Code Polybius Grid | Cat 1B: Classical | `omni-crypto::classical::tap` | CLI, TUI, GUI, API | `test_tap` | `verified` |
-| `cipher.rot` | ROT5, ROT13, ROT18, ROT47 | Cat 1B: Classical | `omni-crypto::classical::rot` | CLI, TUI, GUI, API | `test_rot` | `verified` |
-| `cipher.affine` | Affine Cipher $(ax + b \pmod m)$ | Cat 1B: Classical | `omni-crypto::classical::affine` | CLI, TUI, GUI, API | `test_affine` | `verified` |
-| `cipher.atbash` | Atbash Hebrew Alphabet Reversal | Cat 1B: Classical | `omni-crypto::classical::atbash` | CLI, TUI, GUI, API | `test_atbash` | `verified` |
-| `cipher.vigenere` | Vigenère Polyalphabetic Cipher | Cat 1B: Classical | `omni-crypto::classical::vigenere` | CLI, TUI, GUI, API | `test_vigenere` | `verified` |
-| `cipher.playfair` | Playfair Digraph Substitution | Cat 1B: Classical | `omni-crypto::classical::playfair` | CLI, TUI, GUI, API | `test_playfair` | `verified` |
-| `cipher.enigma` | Enigma I / M3 / M4 Rotor Simulator | Cat 1B: Classical | `omni-crypto::classical::enigma` | CLI, TUI, GUI, API | `test_enigma` | `verified` |
-| `hash.md4` | MD4 (RFC 1320 - Legacy) | Cat 1C: Hashing | `omni-crypto::hash::legacy` | CLI, TUI, GUI, API | `test_md4` | `verified` |
-| `hash.md5` | MD5 (RFC 1321 - Legacy) | Cat 1C: Hashing | `omni-crypto::hash::legacy` | CLI, TUI, GUI, API | `test_md5` | `verified` |
-| `hash.sha1` | SHA-1 (FIPS 180-1 - Legacy) | Cat 1C: Hashing | `omni-crypto::hash::legacy` | CLI, TUI, GUI, API | `test_sha1` | `verified` |
-| `hash.ripemd160` | RIPEMD-160 | Cat 1C: Hashing | `omni-crypto::hash::legacy` | CLI, TUI, GUI, API | `test_ripemd` | `verified` |
-| `hash.sha2` | SHA-224, 256, 384, 512, 512/224, 512/256 | Cat 1C: Hashing | `omni-crypto::hash::sha2` | CLI, TUI, GUI, API | `test_sha2` | `verified` |
-| `hash.sha3` | SHA3-224/256/384/512, SHAKE128/256 | Cat 1C: Hashing | `omni-crypto::hash::sha3` | CLI, TUI, GUI, API | `test_sha3` | `verified` |
-| `hash.blake` | BLAKE2s, BLAKE2b, BLAKE3 | Cat 1C: Hashing | `omni-crypto::hash::blake` | CLI, TUI, GUI, API | `test_blake` | `verified` |
-| `hash.fast` | xxHash (32/64/128), MurmurHash3, CityHash, FarmHash, SpookyHash | Cat 1C: Hashing | `omni-crypto::hash::fast` | CLI, TUI, GUI, API | `test_fast_hashes` | `verified` |
-| `checksum.crc` | CRC8, CRC16, CRC32 (IEEE, Castagnoli), CRC64 | Cat 1D: Checksums | `omni-crypto::checksum::crc` | CLI, TUI, GUI, API | `test_crc` | `verified` |
-| `checksum.adler_fletcher` | Adler-32, Fletcher-16, Fletcher-32 | Cat 1D: Checksums | `omni-crypto::checksum::adler` | CLI, TUI, GUI, API | `test_adler_fletcher` | `verified` |
-| `kdf.password` | PBKDF2, bcrypt, scrypt, Argon2d/i/id, HKDF | Cat 1E: KDF | `omni-crypto::kdf` | CLI, TUI, GUI, API | `test_kdf` | `verified` |
-| `crypto.symmetric` | AES (128/192/256 in ECB/CBC/CTR/GCM/XTS), ChaCha20-Poly1305, 3DES, Blowfish, Twofish, RC4 | Cat 1F: Symmetric | `omni-crypto::symmetric` | CLI, TUI, GUI, API | `test_symmetric` | `verified` |
-| `crypto.asymmetric` | RSA (1024-4096, OAEP, PSS), ECDH, Ed25519, Ed448, Secp256k1, NIST P-256/384/521 | Cat 1G: Asymmetric | `omni-crypto::asymmetric` | CLI, TUI, GUI, API | `test_asymmetric` | `verified` |
-| `crypto.pqc` | ML-KEM, ML-DSA, SPHINCS+, Falcon (Post-Quantum) | Cat 1H: PQC | `omni-crypto::pqc` | CLI, TUI, GUI, API | `test_pqc` | `verified` |
-| `crypto.pki` | X.509, ASN.1, DER/PEM, PKCS#7/12, Chain & SAN, OpenSSH/PPK | Cat 1I: Certificates | `omni-crypto::pki` | CLI, TUI, GUI, API | `test_pki` | `verified` |
-| `crypto.jwt` | JWT/JWS/JWE Debugger, Claims, Verification & Tamper Demo | Cat 1J: JWT | `omni-crypto::jwt` | CLI, TUI, GUI, API | `test_jwt` | `verified` |
-| `crypto.auth_signatures` | AWS SigV4, OAuth 1.0a, PKCE Generator | Cat 1K: Signatures | `omni-crypto::signatures` | CLI, TUI, GUI, API | `test_signatures` | `verified` |
-| `crypto.entropy` | Shannon Entropy Calculator, Visualizer & LSB Stego (BMP, PNG, WAV) | Cat 1L: Entropy | `omni-crypto::entropy` | CLI, TUI, GUI, API | `test_entropy` | `verified` |
-
----
-
-## Category 2 — Text, Code, ASTs & Structured Formats
-
-| Op ID | Name | Category / Sub | Crate & Module | Interfaces | Tests | Status |
-|---|---|---|---|---|---|---|
-| `transpile.structured` | JSON, JSON5, JSONC, YAML, TOML, XML, CSV, TSV, INI, Properties, HCL | Cat 2A: Transpiler | `omni-text::transpile` | CLI, TUI, GUI, API | `test_transpile` | `verified` |
-| `query.structured` | jq, XPath, JMESPath, JSONPath | Cat 2B: Query | `omni-text::query` | CLI, TUI, GUI, API | `test_query` | `verified` |
-| `code.ast_analysis` | Tree-Sitter AST inspection, Symbols, Minify/Beautify, De-obfuscation | Cat 2C: Code/AST | `omni-code::ast` | CLI, TUI, GUI, API | `test_code_ast` | `verified` |
-| `text.diff` | Myers Diff, Histogram Diff, Semantic & Line/Word/Char Diff | Cat 2D: Diff | `omni-text::diff` | CLI, TUI, GUI, API | `test_diff` | `verified` |
-| `text.regex_studio` | Regex Studio, PCRE2/ECMAScript, Catastrophic Backtracking Check | Cat 2E: Regex | `omni-text::regex` | CLI, TUI, GUI, API | `test_regex` | `verified` |
-| `text.string_transformers` | Case Conversions, Slugify, Sorting (Natural/Version), Soundex/Metaphone | Cat 2F: String | `omni-text::strings` | CLI, TUI, GUI, API | `test_strings` | `verified` |
-| `text.encodings` | UTF-8, UTF-16, UTF-32, ASCII, ISO-8859, Win-1252, Shift-JIS, GBK, Big5, EBCDIC | Cat 2G: Encodings | `omni-text::encodings` | CLI, TUI, GUI, API | `test_encodings` | `verified` |
-
----
-
-## Category 3 — Documents, Typography & Vector Graphics
-
-| Op ID | Name | Category / Sub | Crate & Module | Interfaces | Tests | Status |
-|---|---|---|---|---|---|---|
-| `doc.transcode` | Markdown (GFM), LaTeX, Typst, AsciiDoc, HTML5, RTF, Man pages | Cat 3A: Transcoding | `omni-documents::transcode` | CLI, TUI, GUI, API | `test_doc_transcode` | `verified` |
-| `doc.math_typeset` | LaTeX Math, MathML, AsciiMath to SVG | Cat 3B: Math | `omni-documents::math` | CLI, TUI, GUI, API | `test_math` | `verified` |
-| `doc.font_toolkit` | OTF, TTF, WOFF, WOFF2 Metadata, Glyphs, Kerning, SVG Export | Cat 3C: Fonts | `omni-documents::fonts` | CLI, TUI, GUI, API | `test_fonts` | `verified` |
-| `pdf.multitool` | PDF Split, Merge, Rotate, Reorder, Crop, AcroForm Fill/Extract | Cat 3D: PDF Multi | `omni-pdf::ops` | CLI, TUI, GUI, API | `test_pdf_ops` | `verified` |
-| `pdf.ocr` | Tesseract OCR Pipeline & Searchable PDF Generation | Cat 3E: OCR | `omni-pdf::ocr` | CLI, TUI, GUI, API | `test_ocr` | `verified` |
-| `pdf.internals` | FlateDecode, Object Inspection, Raw Streams, Metadata Scrubbing | Cat 3F: PDF Internals | `omni-pdf::internals` | CLI, TUI, GUI, API | `test_pdf_internals` | `verified` |
-| `doc.diagram_compiler` | Mermaid, Graphviz DOT, WaveDrom, Vega-Lite to SVG/PNG | Cat 3G: Diagrams | `omni-documents::diagrams` | CLI, TUI, GUI, API | `test_diagrams` | `verified` |
-
----
-
-## Category 4 — Media, Video, Audio & 3D Assets
-
-| Op ID | Name | Category / Sub | Crate & Module | Interfaces | Tests | Status |
-|---|---|---|---|---|---|---|
-| `media.video_inspect` | Video Codecs (H.264/5, AV1, VP9, ProRes), Containers (MP4, MKV, WebM), Timelines | Cat 4A: Video | `omni-media::video` | CLI, TUI, GUI, API | `test_video` | `verified` |
-| `media.audio_process` | EBU R128 LUFS Metering, Silence Detection, Waveform & FFT Spectrum | Cat 4B: Audio | `omni-media::audio` | CLI, TUI, GUI, API | `test_audio` | `verified` |
-| `media.raster_graphics` | JPEG, PNG, WebP, AVIF, TIFF, BMP, TGA, QOI Inspection & Transform | Cat 4C: Raster | `omni-media::raster` | CLI, TUI, GUI, API | `test_raster` | `verified` |
-| `media.color_management` | sRGB, Adobe RGB, Display P3, Rec.709, CIE-XYZ, CIELAB, ICC Profiles | Cat 4D: Color Space | `omni-media::color` | CLI, TUI, GUI, API | `test_color` | `verified` |
-| `media.image_opt_vector` | Lossless PNG/JPEG Optimization & Potrace Bitmap Tracing | Cat 4E: Optimization | `omni-media::vectorize` | CLI, TUI, GUI, API | `test_image_opt` | `verified` |
-| `media.image_metadata` | EXIF, IPTC, XMP, GPS Inspection & Irreversible Scrubbing | Cat 4F: Metadata | `omni-media::metadata` | CLI, TUI, GUI, API | `test_metadata` | `verified` |
-| `media.assets_3d` | OBJ, STL, PLY, glTF/GLB Inspection, Non-manifold Check, Bounding Box | Cat 4G: 3D Assets | `omni-media::threed` | CLI, TUI, GUI, API | `test_3d` | `verified` |
-| `media.shader_pipeline` | GLSL, HLSL, WGSL, SPIR-V Validation & Disassembly | Cat 4H: Shaders | `omni-media::shaders` | CLI, TUI, GUI, API | `test_shaders` | `verified` |
-
----
-
-## Category 5 — Networking, Sockets, Telecom & Protocols
-
-| Op ID | Name | Category / Sub | Crate & Module | Interfaces | Tests | Status |
-|---|---|---|---|---|---|---|
-| `net.socket_engine` | TCP/UDP Client & Listener, Port Forwarding, Transparent Proxy | Cat 5A: Sockets | `omni-network::sockets` | CLI, TUI, GUI, API | `test_sockets` | `verified` |
-| `net.lab_scanner` | Authorized Lab Scanning (TCP SYN/Connect, UDP, ARP, Wake-on-LAN) | Cat 5B: Scanning | `omni-network::scanner` | CLI, TUI, GUI, API | `test_scanner` | `verified` |
-| `net.dns_suite` | UDP/TCP, DoH, DoT, Record Types, DNSSEC Validation, WHOIS/RDAP | Cat 5C: DNS | `omni-network::dns` | CLI, TUI, GUI, API | `test_dns` | `verified` |
-| `net.app_client` | HTTP/1.1, HTTP/2, WebSocket, gRPC/Protobuf, MQTT 3.1.1/5, CoAP | Cat 5D: App Layer | `omni-network::client` | CLI, TUI, GUI, API | `test_app_client` | `verified` |
-| `net.mock_server` | Interactive HTTP & WebSocket Mock Server with Injected Latency/Errors | Cat 5E: Mock Server | `omni-network::mock` | CLI, TUI, GUI, API | `test_mock_server` | `verified` |
-| `net.curl_transpiler` | cURL Parser to Rust, Python, Go, Node.js, C#, PHP | Cat 5F: cURL | `omni-network::curl` | CLI, TUI, GUI, API | `test_curl` | `verified` |
-| `net.pcap_dissect` | PCAP/PCAPNG Dissection (Eth, IP, TCP, UDP, DNS, TLS, HTTP) & Reassembly | Cat 5G: PCAP | `omni-pcap::dissector` | CLI, TUI, GUI, API | `test_pcap` | `verified` |
-| `net.ip_subnet` | IPv4/IPv6 CIDR Calculator, Subnet Splitting, Supernetting, Wildcard Masks | Cat 5H: Subnetting | `omni-network::ip` | CLI, TUI, GUI, API | `test_subnet` | `verified` |
-
----
-
-## Category 6 — Binary Analysis, Firmware & Hardware Interfaces
-
-| Op ID | Name | Category / Sub | Crate & Module | Interfaces | Tests | Status |
-|---|---|---|---|---|---|---|
-| `binary.hex_editor` | Color-Coded Hex View, Diffing, Endianness Conversion, Swapping | Cat 6A: Hex Manipulation | `omni-binary::hex` | CLI, TUI, GUI, API | `test_hex` | `verified` |
-| `binary.ieee754` | IEEE-754 Half (16b), Single (32b), Double (64b) Bit Breakdown & Visualizer | Cat 6B: IEEE-754 | `omni-binary::ieee754` | CLI, TUI, GUI, API | `test_ieee754` | `verified` |
-| `binary.executable_inspect` | ELF, PE/COFF, Mach-O, WASM Headers, Sections, Symbols, Imports/Exports | Cat 6C: Executables | `omni-binary::executables` | CLI, TUI, GUI, API | `test_executables` | `verified` |
-| `binary.checksec` | RELRO, Stack Canaries, NX/DEP, PIE, ASLR, Authenticode Code Signing | Cat 6D: Checksec | `omni-binary::checksec` | CLI, TUI, GUI, API | `test_checksec` | `verified` |
-| `binary.disasm_cfg` | Multi-Arch Disassembly (x86_64, ARM, AArch64, RISC-V, WASM) & CFG Generator | Cat 6E: Disassembly | `omni-binary::disasm` | CLI, TUI, GUI, API | `test_disasm` | `verified` |
-| `binary.hardware_serial` | Serial UART Terminal, Sigrok `.sr` Reader, CAN Bus Log Parser (candump, BLF) | Cat 6F: Hardware | `omni-binary::hardware` | CLI, TUI, GUI, API | `test_hardware` | `verified` |
-| `binary.firmware_extract` | Binwalk-Compatible Signature Extraction (SquashFS, CramFS, JFFS2, U-Boot) | Cat 6G: Firmware | `omni-firmware::extract` | CLI, TUI, GUI, API | `test_firmware` | `verified` |
-
----
-
-## Category 7 — Storage, Filesystems, Serialization & Data Formats
-
-| Op ID | Name | Category / Sub | Crate & Module | Interfaces | Tests | Status |
-|---|---|---|---|---|---|---|
-| `data.embedded_sql` | SQLite / DuckDB SQL Analytics over CSV, TSV, Parquet, JSON | Cat 7A: Embedded Analytics | `omni-storage::sql_analytics` | CLI, TUI, GUI, API | `test_embedded_sql` | `verified` |
-| `data.binary_serialization` | Protobuf Wire Decoding, Avro, MessagePack, BSON, CBOR, ASN.1 | Cat 7B: Serialization | `omni-storage::serialization` | CLI, TUI, GUI, API | `test_serialization` | `verified` |
-| `archive.toolkit` | TAR, GZIP, BZIP2, XZ, Zstandard, ZIP, 7-Zip, ISO 9660 with Bomb Limits | Cat 7C: Archives | `omni-storage::archives` | CLI, TUI, GUI, API | `test_archives` | `verified` |
-| `fs.disk_images` | MBR, GPT, FAT12/16/32, exFAT, ext2/3/4, NTFS Read-Only Traversal | Cat 7D: Filesystems | `omni-filesystems::inspect` | CLI, TUI, GUI, API | `test_filesystems` | `verified` |
-
----
-
-## Category 8 — Cloud, Containers, DevOps & Infrastructure
-
-| Op ID | Name | Category / Sub | Crate & Module | Interfaces | Tests | Status |
-|---|---|---|---|---|---|---|
-| `devops.container_inspect` | Daemonless OCI/Docker Tarball Layer Extraction, Bloat Audit, Dockerfile Lint | Cat 8A: Containers | `omni-infrastructure::containers` | CLI, TUI, GUI, API | `test_containers` | `verified` |
-| `devops.kubernetes` | Kubernetes YAML Validation, Deprecated APIs, RBAC Permission Matrix | Cat 8B: Kubernetes | `omni-infrastructure::kubernetes` | CLI, TUI, GUI, API | `test_k8s` | `verified` |
-| `devops.terraform` | Terraform Plan JSON Parser, Resource Changes (Create/Update/Destroy) | Cat 8C: Terraform | `omni-infrastructure::terraform` | CLI, TUI, GUI, API | `test_terraform` | `verified` |
-| `devops.cloud_iam` | AWS & GCP IAM Policy Simulation, OPA Rego Evaluation Sandbox | Cat 8D: IAM & Policy | `omni-infrastructure::iam` | CLI, TUI, GUI, API | `test_cloud_iam` | `verified` |
-
----
-
-## Category 9 — AI, Tensors, Models & Tokenization
-
-| Op ID | Name | Category / Sub | Crate & Module | Interfaces | Tests | Status |
-|---|---|---|---|---|---|---|
-| `ai.model_inspect` | GGUF, GGML, Safetensors, PyTorch `.pt`/`.pth` Header, ONNX Graph Visualizer | Cat 9A: Models | `omni-ai::models` | CLI, TUI, GUI, API | `test_models` | `verified` |
-| `ai.tokenizer_playground` | BPE, WordPiece, tiktoken (cl100k_base, o200k_base) Tokenizer & Boundary Visualizer | Cat 9B: Tokenizer | `omni-ai::tokenizer` | CLI, TUI, GUI, API | `test_tokenizer` | `verified` |
-| `ai.vector_sandbox` | Cosine Similarity, Euclidean Distance, Dot Product, Manhattan Distance | Cat 9C: Vectors | `omni-ai::vectors` | CLI, TUI, GUI, API | `test_vectors` | `verified` |
-| `ai.quantization_sim` | FP32, FP16, BF16, INT8, INT4 Simulation, Error Distribution & Quant Loss | Cat 9D: Quantization | `omni-ai::quantization` | CLI, TUI, GUI, API | `test_quant` | `verified` |
-
----
-
-## Category 10 — System Internals, Diagnostics & Core Utilities
-
-| Op ID | Name | Category / Sub | Crate & Module | Interfaces | Tests | Status |
-|---|---|---|---|---|---|---|
-| `system.tracing_parser` | strace / dtruss / eBPF Log Parser, Syscall Grouping & File Descriptor Tracking | Cat 10A: Tracing | `omni-system::tracing_parser` | CLI, TUI, GUI, API | `test_tracing` | `verified` |
-| `system.cron_timers` | Cron Expression Parser/Builder, Human Explanation, Next 20 Runs, ISO 8601 | Cat 10B: Cron | `omni-system::cron` | CLI, TUI, GUI, API | `test_cron` | `verified` |
-| `system.identifiers` | UUID (v1, v3, v4, v5, v6, v7), ULID, KSUID, Snowflake Generator & Timestamp Extractor | Cat 10C: IDs | `omni-system::identifiers` | CLI, TUI, GUI, API | `test_identifiers` | `verified` |
-| `system.color_toolkit` | HEX, RGB, HSL, HSV, CMYK, LAB, LCH, Oklab, WCAG 2.1 Contrast & Palette Gen | Cat 10D: Colors | `omni-system::colors` | CLI, TUI, GUI, API | `test_colors` | `verified` |
-| `system.flamegraph` | perf / pprof / DTrace Stack Trace Parser & Interactive SVG Flamegraph Generator | Cat 10E: Profiling | `omni-system::flamegraph` | CLI, TUI, GUI, API | `test_flamegraph` | `verified` |
-
----
-
-## Summary Statistics
-- **Total Operational Modules**: 64 comprehensive tool suites covering 100% of specification catalogue.
-- **Coverage**: All 10 categories fully represented across unified `Operation` interface.
-- **Verification Guarantee**: Every module executes real algorithmic logic with zero fake stubs.
+| `ai.model_inspect` | Model Architecture & GGUF/Safetensors Inspector | AiAndTensors | `verified` | No | `Safe` | Inspects GGUF and HuggingFace Safetensors headers; PyTorch pickle (.pt/.pth) and ONNX graph rendering are not implemented |
+| `ai.quantize` | Quantization Simulator & Precision Metrics | AiAndTensors | `implemented` | No | `Safe` | None documented |
+| `ai.tokenizer` | BPE Tokenizer Playground (tiktoken) | AiAndTensors | `verified` | No | `Safe` | Supports tiktoken BPE encodings (cl100k_base, o200k_base, p50k_base, r50k_base); SentencePiece/WordPiece/LLaMA model files require external vocabulary loading not bundled here |
+| `ai.vector` | Vector Math & Distance Metrics Studio | AiAndTensors | `implemented` | No | `Safe` | None documented |
+| `archive.toolkit` | Archive Toolkit & Decompression Bomb Guard | StorageAndFormats | `verified` | No | `Safe` | Supports ZIP, TAR, and GZIP inspection/decompression; BZIP2, XZ, Zstd, 7z, RAR, ISO 9660, VHD, and VMDK are not implemented |
+| `audio.lufs` | EBU R128 & ITU-R BS.1770-4 Loudness Meter | DocumentsAndMedia | `implemented` | No | `Safe` | None documented |
+| `audio.silence` | Audio Silence & RMS Threshold Detector | DocumentsAndMedia | `implemented` | No | `Safe` | None documented |
+| `audio.waveform` | Audio Waveform & Spectral Analyzer | DocumentsAndMedia | `implemented` | No | `Safe` | None documented |
+| `binary.disasm` | x86 / x86-64 Disassembler & CFG Generator | BinaryAnalysis | `verified` | No | `Safe` | Supports x86-16, x86-32, and x86-64 instruction sets via iced-x86; ARM, AArch64, RISC-V, and MIPS are not implemented |
+| `binary.executable` | Multi-Format Executable & Checksec Inspector | BinaryAnalysis | `implemented` | No | `Safe` | None documented |
+| `binary.hex` | Hex Editor & Bitwise Operations Engine | BinaryAnalysis | `implemented` | No | `Safe` | None documented |
+| `binary.ieee754` | IEEE-754 Floating-Point Visualizer | BinaryAnalysis | `implemented` | No | `Safe` | None documented |
+| `checksum.adler32` | Checksum (ADLER32) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `checksum.crc16` | Checksum (CRC16) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `checksum.crc32` | Checksum (CRC32) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `checksum.crc32_castagnoli` | Checksum (CRC32_CASTAGNOLI) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `checksum.crc64` | Checksum (CRC64) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `checksum.crc8` | Checksum (CRC8) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `checksum.fletcher16` | Checksum (FLETCHER16) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `checksum.fletcher32` | Checksum (FLETCHER32) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `cipher.13` | ROT13 | Cryptography | `implemented` | No | `Safe` | None documented |
+| `cipher.18` | ROT18 | Cryptography | `implemented` | No | `Safe` | None documented |
+| `cipher.47` | ROT47 | Cryptography | `implemented` | No | `Safe` | None documented |
+| `cipher.5` | ROT5 | Cryptography | `implemented` | No | `Safe` | None documented |
+| `cipher.affine` | Affine Cipher | Cryptography | `implemented` | No | `Safe` | None documented |
+| `cipher.atbash` | Atbash Cipher | Cryptography | `implemented` | No | `Safe` | None documented |
+| `cipher.enigma` | Enigma Rotor Simulator | Cryptography | `implemented` | No | `Safe` | None documented |
+| `cipher.morse` | Morse Code | Cryptography | `implemented` | No | `Safe` | None documented |
+| `cipher.vigenere` | Vigenère Cipher | Cryptography | `implemented` | No | `Safe` | None documented |
+| `cloud.container` | Container Forensics & Dockerfile Linter | CloudAndDevOps | `implemented` | No | `Safe` | None documented |
+| `cloud.iac` | IaC Security & Cloud IAM Simulator | CloudAndDevOps | `implemented` | No | `Safe` | None documented |
+| `code.ast_analysis` | AST Code Analysis & De-obfuscation | TextAndCode | `implemented` | No | `Safe` | None documented |
+| `crypto.asymmetric.ed25519` | Ed25519 Digital Signatures | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.asymmetric.rsa` | RSA Toolkit | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.auth_signatures` | Signature & Auth Utilities | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.entropy.lsb_stego` | LSB Steganography Injector & Extractor | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.entropy.shannon` | Shannon Entropy Calculator | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.blake2b` | Hash (BLAKE2B) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.blake2s` | Hash (BLAKE2S) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.blake3` | Hash (BLAKE3) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.md5` | Hash (MD5) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.murmur3` | Hash (MURMUR3) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.ripemd160` | Hash (RIPEMD160) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.sha1` | Hash (SHA1) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.sha224` | Hash (SHA224) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.sha256` | Hash (SHA256) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.sha384` | Hash (SHA384) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.sha3_224` | Hash (SHA3_224) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.sha3_256` | Hash (SHA3_256) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.sha3_384` | Hash (SHA3_384) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.sha3_512` | Hash (SHA3_512) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.sha512` | Hash (SHA512) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.sha512_224` | Hash (SHA512_224) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.sha512_256` | Hash (SHA512_256) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.shake128` | Hash (SHAKE128) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.shake256` | Hash (SHAKE256) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.xxhash32` | Hash (XXHASH32) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.hash.xxhash64` | Hash (XXHASH64) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.jwt.debugger` | JWT / JWS Debugger | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.pki.x509_inspect` | X.509 Certificate Inspector | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.pqc.falcon` | Post-Quantum (FALCON) | Cryptography | `unsupported` | No | `Safe` | No audited pure-Rust NIST-finalized FN-DSA crate is bundled; operation returns unsupported error rather than simulating cryptography |
+| `crypto.pqc.ml_dsa` | Post-Quantum (ML-DSA) | Cryptography | `verified` | No | `Safe` | Uses ML-DSA-65 (NIST Level 3) parameter set with empty context string by default |
+| `crypto.pqc.ml_kem` | Post-Quantum (ML-KEM) | Cryptography | `verified` | No | `Safe` | Uses ML-KEM-768 (NIST Level 3) parameter set; secret keys are returned hex-encoded only when explicitly requested via action='keygen' |
+| `crypto.pqc.sphincs_plus` | Post-Quantum (SPHINCS_PLUS) | Cryptography | `verified` | No | `Safe` | Uses SLH-DSA-SHA2-128f parameter set; signing is computationally heavier than lattice schemes |
+| `crypto.symmetric.aes_128_gcm` | Symmetric Cipher (AES-128-GCM) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.symmetric.aes_256_gcm` | Symmetric Cipher (AES-256-GCM) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.symmetric.chacha20poly1305` | Symmetric Cipher (CHACHA20POLY1305) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `crypto.symmetric.rc4` | Symmetric Cipher (RC4) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `doc.diagram_compiler` | Diagram-as-Code Compiler (Mermaid / DOT) | DocumentsAndMedia | `verified` | No | `Safe` | Supports Mermaid graph/flowchart syntax and Graphviz DOT directed edges; sequence/Gantt/PlantUML/D2/Vega-Lite are not supported by the built-in offline renderer |
+| `doc.font_toolkit` | Font Toolkit & Inspector | DocumentsAndMedia | `implemented` | No | `Safe` | None documented |
+| `doc.math_typeset` | Mathematical Typesetting (LaTeX subset -> SVG / MathML) | DocumentsAndMedia | `verified` | No | `Safe` | Supports a practical LaTeX math subset (\frac, \sqrt, ^, _, Greek letters, common operators); full TeX macro expansion and matrices are not supported |
+| `doc.transcode` | Document Transcoder | DocumentsAndMedia | `implemented` | No | `Safe` | None documented |
+| `encode.base16` | Base16 (Hex) | Encoders | `implemented` | No | `Safe` | None documented |
+| `encode.base32` | Base32 | Encoders | `implemented` | No | `Safe` | None documented |
+| `encode.base32hex` | Base32Hex | Encoders | `implemented` | No | `Safe` | None documented |
+| `encode.base45` | Base45 | Encoders | `implemented` | No | `Safe` | None documented |
+| `encode.base58` | Base58 | Encoders | `implemented` | No | `Safe` | None documented |
+| `encode.base62` | Base62 | Encoders | `implemented` | No | `Safe` | None documented |
+| `encode.base64` | Base64 | Encoders | `implemented` | No | `Safe` | None documented |
+| `encode.base64url` | Base64URL | Encoders | `implemented` | No | `Safe` | None documented |
+| `encode.base85` | Base85 (Ascii85) | Encoders | `implemented` | No | `Safe` | None documented |
+| `encode.base91` | Base91 | Encoders | `implemented` | No | `Safe` | None documented |
+| `encode.html_entities` | HTML4 / HTML5 Entities | Encoders | `implemented` | No | `Safe` | None documented |
+| `encode.octal_escapes` | Octal Escapes | Encoders | `implemented` | No | `Safe` | None documented |
+| `encode.punycode` | Punycode / IDNA | Encoders | `implemented` | No | `Safe` | None documented |
+| `encode.quoted_printable` | Quoted-Printable | Encoders | `implemented` | No | `Safe` | None documented |
+| `encode.unicode_escapes` | Unicode Escapes | Encoders | `implemented` | No | `Safe` | None documented |
+| `encode.url` | URL Percent Encoding | Encoders | `implemented` | No | `Safe` | None documented |
+| `firmware.extract` | Firmware Signature Scanner & Entropy Mapper | BinaryAnalysis | `implemented` | No | `Safe` | None documented |
+| `fs.forensics` | Filesystem & Partition Forensics | StorageAndFormats | `implemented` | No | `Safe` | None documented |
+| `geo3d.inspect` | 3D Mesh & Geometry Inspector | DocumentsAndMedia | `implemented` | No | `Safe` | None documented |
+| `geo3d.shader` | Shader AST & Syntax Validator | DocumentsAndMedia | `implemented` | No | `Safe` | None documented |
+| `hardware.can` | CAN Bus Log & OBD-II Decoder | BinaryAnalysis | `implemented` | No | `Safe` | None documented |
+| `hardware.serial` | Serial/UART Protocol Inspector | BinaryAnalysis | `implemented` | No | `Safe` | None documented |
+| `image.color_space` | Color Space & Delta-E 2000 Engine | DocumentsAndMedia | `implemented` | No | `Safe` | None documented |
+| `image.metadata` | Image EXIF & Metadata Forensics | DocumentsAndMedia | `implemented` | No | `Safe` | None documented |
+| `image.pipeline` | Multi-Format Image Processor | DocumentsAndMedia | `implemented` | No | `Safe` | None documented |
+| `kdf.argon2d` | Password Hash / KDF (ARGON2D) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `kdf.argon2i` | Password Hash / KDF (ARGON2I) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `kdf.argon2id` | Password Hash / KDF (ARGON2ID) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `kdf.bcrypt` | Password Hash / KDF (BCRYPT) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `kdf.hkdf` | Password Hash / KDF (HKDF) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `kdf.pbkdf2` | Password Hash / KDF (PBKDF2) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `kdf.scrypt` | Password Hash / KDF (SCRYPT) | Cryptography | `implemented` | No | `Safe` | None documented |
+| `media.probe` | Media Container & Codec Probe | DocumentsAndMedia | `verified` | No | `Safe` | None documented |
+| `media.transcode` | FFmpeg Media Transcoder | DocumentsAndMedia | `experimental` | No | `Safe` | Actual media transcoding requires the `ffmpeg` executable to be installed on the host PATH (or supplied via config.ffmpeg_path); Supported codecs are allowlisted (libx264, libx265, libvpx-vp9, libaom-av1, copy, aac, libopus, libmp3lame, flac, pcm_s16le) |
+| `net.dns` | DNS Wire Encoder, Decoder & Scoped UDP Resolver | Networking | `verified` | No | `NetworkAccess` | Live UDP queries default to local/private resolvers unless config.allow_external=true is explicitly set; DoH, DoT, DoQ, DNSSEC cryptographic validation, and WHOIS/RDAP are not implemented in this module |
+| `net.http_client` | cURL Parser & Multi-Language HTTP Code Generator | Networking | `verified` | No | `Safe` | Offline parser and code generator only; does not transmit live HTTP requests unless an external HTTP client is invoked |
+| `net.ip_calc` | CIDR & Subnet Calculator | Networking | `implemented` | No | `Safe` | None documented |
+| `net.scanner` | Authorized Lab Network Scanner | Networking | `implemented` | No | `Safe` | None documented |
+| `net.socket` | Socket Stream & Latency Tester | Networking | `implemented` | No | `Safe` | None documented |
+| `pcap.dissect` | PCAP & PCAPNG Deep Packet Dissector | Networking | `implemented` | No | `Safe` | None documented |
+| `pcap.reassemble` | TCP Stream Reassembler & Payload Carver | Networking | `implemented` | No | `Safe` | None documented |
+| `pdf.internals` | PDF Structure & Stream Inspector | DocumentsAndMedia | `implemented` | No | `Safe` | None documented |
+| `pdf.multitool` | PDF Multi-Tool | DocumentsAndMedia | `implemented` | No | `Safe` | None documented |
+| `pdf.ocr` | PDF Text Extractor & Tesseract OCR Runner | DocumentsAndMedia | `experimental` | No | `Safe` | Embedded PDF text extraction reads existing PDF text streams via lopdf (no synthetic bounding boxes); Optical character recognition (mode='tesseract' or raster image input) requires `tesseract` installed on host PATH |
+| `pdf.scrubber` | PDF Metadata Sanitizer & Scrubber | DocumentsAndMedia | `implemented` | No | `Safe` | None documented |
+| `pipeline.concat` | Pipeline Multi-Input Concatenation | TextAndCode | `verified` | Yes | `Safe` | None documented |
+| `pipeline.merge` | Pipeline Multi-Input JSON Merge | TextAndCode | `verified` | Yes | `Safe` | None documented |
+| `query.structured` | Structured Query & Extraction (jq / JSONPath) | TextAndCode | `implemented` | No | `Safe` | None documented |
+| `storage.binary_formats` | Binary Serialization Decoder (Protobuf/MsgPack/ASN.1) | StorageAndFormats | `implemented` | No | `Safe` | None documented |
+| `storage.sql` | In-Memory SQL Analytics Engine (SQLite) | StorageAndFormats | `verified` | No | `Safe` | Backed by embedded in-memory SQLite (DuckDB and Parquet native ingestion are not bundled); Restricted strictly to read-only SELECT/WITH/EXPLAIN queries |
+| `system.color` | Color Toolkit & WCAG Contrast Engine | SystemDiagnostics | `implemented` | No | `Safe` | None documented |
+| `system.cron` | Cron Parser & Execution Scheduler | SystemDiagnostics | `implemented` | No | `Safe` | None documented |
+| `system.flamegraph` | Folded Stack & SVG Flamegraph Generator | SystemDiagnostics | `verified` | No | `Safe` | None documented |
+| `system.ids` | Universal Identifier Toolkit | SystemDiagnostics | `implemented` | No | `Safe` | None documented |
+| `system.trace` | Syscall & Process Trace Analyzer | SystemDiagnostics | `implemented` | No | `Safe` | None documented |
+| `text.diff` | Text Diff & Analysis | TextAndCode | `verified` | Yes | `Safe` | None documented |
+| `text.encodings` | Character Encoding Converter | TextAndCode | `implemented` | No | `Safe` | None documented |
+| `text.regex_studio` | Regex Studio | TextAndCode | `implemented` | No | `Safe` | None documented |
+| `text.string_transformers` | String Transformers & Phonetics | TextAndCode | `implemented` | No | `Safe` | None documented |
+| `transpile.structured` | Omni-Format Transpiler | TextAndCode | `implemented` | No | `Safe` | None documented |

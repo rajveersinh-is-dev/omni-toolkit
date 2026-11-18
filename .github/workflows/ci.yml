@@ -6,12 +6,15 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   test:
-    name: Test (${{ matrix.os }})
+    name: Build, Test & Lint (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -38,11 +41,21 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Cargo Check
+      - name: Cargo Check (all targets)
         run: cargo check --workspace --all-targets
 
-      - name: Cargo Test
+      - name: Build CLI binary for E2E tests
+        run: cargo build -p omni
+
+      - name: Cargo Test (workspace)
         run: cargo test --workspace
 
-      - name: Cargo Clippy
-        run: cargo clippy --all-targets -- -D warnings
+      - name: Cargo Clippy (-D warnings)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Cargo Doc check
+        run: cargo doc --workspace --no-deps
+
+      - name: Verify native desktop WebView build (Windows/macOS)
+        if: matrix.os == 'windows-latest' || matrix.os == 'macos-latest'
+        run: cargo check -p omni-desktop --features native-webview
