@@ -23,7 +23,9 @@ fn test_decompression_bomb_limits() {
     assert!(limits.check_decompression(0, 10).is_err());
 
     // 4. Absolute size violation: exceeds 500MB max
-    assert!(limits.check_decompression(10_000_000, 600 * 1024 * 1024).is_err());
+    assert!(limits
+        .check_decompression(10_000_000, 600 * 1024 * 1024)
+        .is_err());
 
     // 5. Normal safe decompression: 1000 bytes -> 5000 bytes (5:1 ratio)
     assert!(limits.check_decompression(1000, 5000).is_ok());

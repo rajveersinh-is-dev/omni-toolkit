@@ -174,10 +174,7 @@ impl JobManager {
 
     /// Returns the number of currently active (queued or running) jobs.
     pub fn active_job_count(&self) -> usize {
-        self.active_jobs
-            .read()
-            .map(|g| g.len())
-            .unwrap_or(0)
+        self.active_jobs.read().map(|g| g.len()).unwrap_or(0)
     }
 
     fn emit_event(&self, job_id: &str, event: JobEvent) {
@@ -314,7 +311,10 @@ impl JobManager {
                 .read()
                 .map_err(|e| OmniError::Internal(format!("Registry lock poisoned: {e}")))?;
             reg.get(operation_id).ok_or_else(|| {
-                OmniError::NotFound(format!("Operation '{}' not found in registry", operation_id))
+                OmniError::NotFound(format!(
+                    "Operation '{}' not found in registry",
+                    operation_id
+                ))
             })?
         };
 
@@ -369,9 +369,8 @@ impl JobManager {
         });
 
         let worker_ctx = ctx.clone();
-        let mut worker_handle = tokio::spawn(async move {
-            op.execute(input, config, &worker_ctx).await
-        });
+        let mut worker_handle =
+            tokio::spawn(async move { op.execute(input, config, &worker_ctx).await });
 
         let remaining = timeout.saturating_sub(start.elapsed());
         let result = tokio::select! {
@@ -481,7 +480,9 @@ impl JobManager {
         input: DataPayload,
         timeout: Duration,
     ) -> OmniResult<HashMap<String, DataPayload>> {
-        let report = self.run_pipeline_with_report(pipeline, input, timeout).await?;
+        let report = self
+            .run_pipeline_with_report(pipeline, input, timeout)
+            .await?;
         Ok(report.outputs)
     }
 

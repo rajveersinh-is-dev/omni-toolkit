@@ -102,6 +102,79 @@ mod tests {
         let json = res.into_json().unwrap();
         assert_eq!(json["total_streams_found"], 1);
         let stream = &json["streams"][0];
-        assert!(stream["preview"].as_str().unwrap().contains("GET /index.html"));
+        assert!(stream["preview"]
+            .as_str()
+            .unwrap()
+            .contains("GET /index.html"));
+    }
+
+    #[tokio::test]
+    async fn test_pcap_big_endian_and_tcp_retransmit_deduplication() {
+        let ctx = ExecutionContext::new("t_pcap_be");
+
+        // Build big-endian PCAP (magic 0xA1B2C3D4 on wire) with 2 packets:
+        // seq 1000 "HELLO" followed by duplicate retransmit seq 1000 "HELLO" and seq 1005 "_WORLD"
+        let make_tcp_frame = |seq: u32, payload: &[u8]| -> Vec<u8> {
+            let mut pkt = Vec::new();
+            pkt.extend_from_slice(&[0x00, 0x11, 0x22, 0x33, 0x44, 0x55]);
+            pkt.extend_from_slice(&[0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
+            pkt.extend_from_slice(&[0x08, 0x00]);
+            let ip_len = (20 + 20 + payload.len()) as u16;
+            pkt.extend_from_slice(&[0x45, 0x00]);
+            pkt.extend_from_slice(&ip_len.to_be_bytes());
+            pkt.extend_from_slice(&[0x00, 0x01, 0x40, 0x00, 0x40, 0x06, 0x00, 0x00]);
+            pkt.extend_from_slice(&[10, 0, 0, 1, 10, 0, 0, 2]);
+            pkt.extend_from_slice(&12345u16.to_be_bytes());
+            pkt.extend_from_slice(&8080u16.to_be_bytes());
+            pkt.extend_from_slice(&seq.to_be_bytes());
+            pkt.extend_from_slice(&0u32.to_be_bytes());
+            pkt.extend_from_slice(&[0x50, 0x18, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00]);
+            pkt.extend_from_slice(payload);
+            pkt
+        };
+
+        let mut be_pcap = Vec::new();
+        be_pcap.extend_from_slice(&[0xA1, 0xB2, 0xC3, 0xD4]); // Big-endian magic
+        be_pcap.extend_from_slice(&[0x00, 0x02, 0x00, 0x04]);
+        be_pcap.extend_from_slice(&[0u8; 8]);
+        be_pcap.extend_from_slice(&65535u32.to_be_bytes());
+        be_pcap.extend_from_slice(&1u32.to_be_bytes());
+
+        for (seq, data) in [
+            (1005u32, b"_WORLD".as_slice()),
+            (1000u32, b"HELLO".as_slice()),
+            (1000u32, b"HELLO".as_slice()), // duplicate retransmit
+        ] {
+            let frame = make_tcp_frame(seq, data);
+            let clen = frame.len() as u32;
+            be_pcap.extend_from_slice(&1700000000u32.to_be_bytes());
+            be_pcap.extend_from_slice(&0u32.to_be_bytes());
+            be_pcap.extend_from_slice(&clen.to_be_bytes());
+            be_pcap.extend_from_slice(&clen.to_be_bytes());
+            be_pcap.extend_from_slice(&frame);
+        }
+
+        let dis = PcapDissectOp
+            .execute(
+                DataPayload::bytes(be_pcap.clone()),
+                serde_json::json!({}),
+                &ctx,
+            )
+            .await
+            .unwrap()
+            .into_json()
+            .unwrap();
+        assert_eq!(dis["total_packets_parsed"], 3);
+
+        let re = PcapReassembleOp
+            .execute(DataPayload::bytes(be_pcap), serde_json::json!({}), &ctx)
+            .await
+            .unwrap()
+            .into_json()
+            .unwrap();
+        assert_eq!(re["total_streams_found"], 1);
+        assert_eq!(re["streams"][0]["preview"], "HELLO_WORLD");
+        assert_eq!(re["streams"][0]["total_bytes_reassembled"], 11);
+        assert_eq!(re["streams"][0]["duplicate_segments_skipped"], 1);
     }
 }

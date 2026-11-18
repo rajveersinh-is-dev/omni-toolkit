@@ -1,6 +1,6 @@
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniError, OmniResult, Operation,
-    OperationCategory, OperationManifest,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
+    Operation, OperationCategory, OperationManifest,
 };
 use serde_json::{json, Value};
 
@@ -33,7 +33,9 @@ fn parse_varint(bytes: &[u8], offset: &mut usize) -> Option<u64> {
 }
 
 fn parse_protobuf_wire(bytes: &[u8], depth: usize) -> Vec<ProtobufField> {
-    if depth > 10 { return Vec::new(); }
+    if depth > 10 {
+        return Vec::new();
+    }
     let mut fields = Vec::new();
     let mut offset = 0;
 
@@ -48,7 +50,9 @@ fn parse_protobuf_wire(bytes: &[u8], depth: usize) -> Vec<ProtobufField> {
 
         let (wire_name, field_val) = match wire_type {
             0 => {
-                let v = parse_varint(bytes, &mut offset).unwrap_or(0);
+                let Some(v) = parse_varint(bytes, &mut offset) else {
+                    break;
+                };
                 ("varint", json!(v))
             }
             1 => {
@@ -64,13 +68,19 @@ fn parse_protobuf_wire(bytes: &[u8], depth: usize) -> Vec<ProtobufField> {
                 }
             }
             2 => {
-                let len = match parse_varint(bytes, &mut offset) {
-                    Some(l) => l as usize,
+                let len_u64 = match parse_varint(bytes, &mut offset) {
+                    Some(l) => l,
                     None => break,
                 };
-                if offset + len <= bytes.len() {
-                    let slice = &bytes[offset..offset + len];
-                    offset += len;
+                let Ok(len) = usize::try_from(len_u64) else {
+                    break;
+                };
+                let Some(end) = offset.checked_add(len) else {
+                    break;
+                };
+                if end <= bytes.len() {
+                    let slice = &bytes[offset..end];
+                    offset = end;
 
                     // Check if UTF-8 string
                     if let Ok(s) = std::str::from_utf8(slice) {
@@ -79,9 +89,15 @@ fn parse_protobuf_wire(bytes: &[u8], depth: usize) -> Vec<ProtobufField> {
                         // Attempt recursive sub-message parse
                         let sub = parse_protobuf_wire(slice, depth + 1);
                         if !sub.is_empty() {
-                            ("length-delimited (embedded)", json!({ "embedded_message": sub }))
+                            (
+                                "length-delimited (embedded)",
+                                json!({ "embedded_message": sub }),
+                            )
                         } else {
-                            ("length-delimited", json!({ "bytes_hex": hex::encode(slice) }))
+                            (
+                                "length-delimited",
+                                json!({ "bytes_hex": hex::encode(slice) }),
+                            )
                         }
                     }
                 } else {
@@ -89,7 +105,7 @@ fn parse_protobuf_wire(bytes: &[u8], depth: usize) -> Vec<ProtobufField> {
                 }
             }
             5 => {
-                if offset + 4 <= bytes.len() {
+                if offset.checked_add(4).is_some_and(|e| e <= bytes.len()) {
                     let mut b = [0u8; 4];
                     b.copy_from_slice(&bytes[offset..offset + 4]);
                     offset += 4;
@@ -100,7 +116,15 @@ fn parse_protobuf_wire(bytes: &[u8], depth: usize) -> Vec<ProtobufField> {
                     break;
                 }
             }
-            _ => ("unknown", json!({ "unsupported_wire_type": wire_type })),
+            _ => {
+                fields.push(ProtobufField {
+                    field_number: field_num,
+                    wire_type,
+                    wire_type_name: "unknown".into(),
+                    value: json!({ "unsupported_wire_type": wire_type }),
+                });
+                break;
+            }
         };
 
         fields.push(ProtobufField {
@@ -115,11 +139,15 @@ fn parse_protobuf_wire(bytes: &[u8], depth: usize) -> Vec<ProtobufField> {
 }
 
 fn parse_asn1_der(bytes: &[u8], offset: &mut usize) -> Option<Value> {
-    if *offset >= bytes.len() { return None; }
+    if *offset >= bytes.len() {
+        return None;
+    }
     let tag = bytes[*offset];
     *offset += 1;
 
-    if *offset >= bytes.len() { return None; }
+    if *offset >= bytes.len() {
+        return None;
+    }
     let len_byte = bytes[*offset];
     *offset += 1;
 
@@ -127,7 +155,13 @@ fn parse_asn1_der(bytes: &[u8], offset: &mut usize) -> Option<Value> {
         len_byte as usize
     } else {
         let num_bytes = (len_byte & 0x7F) as usize;
-        if *offset + num_bytes > bytes.len() { return None; }
+        if num_bytes == 0 || num_bytes > std::mem::size_of::<usize>() {
+            return None;
+        }
+        let end_len = offset.checked_add(num_bytes)?;
+        if end_len > bytes.len() {
+            return None;
+        }
         let mut l = 0usize;
         for _ in 0..num_bytes {
             l = (l << 8) | (bytes[*offset] as usize);
@@ -136,9 +170,12 @@ fn parse_asn1_der(bytes: &[u8], offset: &mut usize) -> Option<Value> {
         l
     };
 
-    if *offset + len > bytes.len() { return None; }
-    let value_bytes = &bytes[*offset..*offset + len];
-    *offset += len;
+    let end = offset.checked_add(len)?;
+    if end > bytes.len() {
+        return None;
+    }
+    let value_bytes = &bytes[*offset..end];
+    *offset = end;
 
     let tag_name = match tag {
         0x01 => "BOOLEAN",
@@ -177,16 +214,26 @@ impl Operation for BinaryFormatsOp {
             OperationCategory::StorageAndFormats,
         )
         .with_types(vec![DataType::Bytes], vec![DataType::Json])
+        .with_status(FeatureStatus::Verified)
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
-        let format = config.get("format").and_then(|v| v.as_str()).unwrap_or("protobuf");
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
+        let format = config
+            .get("format")
+            .and_then(|v| v.as_str())
+            .unwrap_or("protobuf");
         let bytes = input.into_bytes();
 
         match format {
             "msgpack" | "messagepack" => {
-                let val: Value = rmp_serde::from_slice(&bytes)
-                    .map_err(|e| OmniError::InvalidInput(format!("MessagePack decode failed: {e}")))?;
+                let val: Value = rmp_serde::from_slice(&bytes).map_err(|e| {
+                    OmniError::InvalidInput(format!("MessagePack decode failed: {e}"))
+                })?;
                 Ok(DataPayload::json(json!({
                     "format": "MessagePack",
                     "data": val,
@@ -197,7 +244,9 @@ impl Operation for BinaryFormatsOp {
                 let mut elements = Vec::new();
                 while let Some(elem) = parse_asn1_der(&bytes, &mut offset) {
                     elements.push(elem);
-                    if offset >= bytes.len() { break; }
+                    if offset >= bytes.len() {
+                        break;
+                    }
                 }
                 Ok(DataPayload::json(json!({
                     "format": "ASN.1 DER",

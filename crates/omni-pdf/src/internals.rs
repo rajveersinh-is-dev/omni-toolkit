@@ -1,7 +1,7 @@
 use lopdf::{Document, Object};
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniError, OmniResult, Operation,
-    OperationCategory, OperationManifest,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
+    Operation, OperationCategory, OperationManifest,
 };
 use serde_json::{json, Value};
 
@@ -17,10 +17,19 @@ impl Operation for PdfInternalsOp {
             OperationCategory::DocumentsAndMedia,
         )
         .with_types(vec![DataType::Bytes], vec![DataType::Json, DataType::Bytes])
+        .with_status(FeatureStatus::Verified)
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
-        let action = config.get("action").and_then(|v| v.as_str()).unwrap_or("inspect");
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
+        let action = config
+            .get("action")
+            .and_then(|v| v.as_str())
+            .unwrap_or("inspect");
         let bytes = input.into_bytes();
 
         let mut doc = Document::load_mem(&bytes)
@@ -30,8 +39,10 @@ impl Operation for PdfInternalsOp {
             "decompress_all" => {
                 doc.decompress();
                 let mut out = Vec::new();
-                doc.save_to(&mut out)
-                    .map_err(|e| OmniError::Execution { operation: "pdf_decompress".into(), message: e.to_string() })?;
+                doc.save_to(&mut out).map_err(|e| OmniError::Execution {
+                    operation: "pdf_decompress".into(),
+                    message: e.to_string(),
+                })?;
                 Ok(DataPayload::bytes(out))
             }
             _ => {

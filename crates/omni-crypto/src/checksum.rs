@@ -1,5 +1,5 @@
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniResult, Operation,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniResult, Operation,
     OperationCategory, OperationManifest,
 };
 use serde_json::Value;
@@ -18,9 +18,16 @@ impl Operation for ChecksumOp {
             OperationCategory::Cryptography,
         )
         .with_types(vec![DataType::Bytes, DataType::Text], vec![DataType::Text])
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec!["checksum".into(), self.algorithm.to_lowercase()])
     }
 
-    async fn execute(&self, input: DataPayload, _config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
+    async fn execute(
+        &self,
+        input: DataPayload,
+        _config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
         let bytes = input.into_bytes();
         let result = match self.algorithm.to_lowercase().as_str() {
             "crc8" => {
@@ -61,13 +68,17 @@ impl Operation for ChecksumOp {
                 for &b in &bytes {
                     crc ^= b as u32;
                     for _ in 0..8 {
-                        crc = if (crc & 1) != 0 { (crc >> 1) ^ 0x82F63B78 } else { crc >> 1 };
+                        crc = if (crc & 1) != 0 {
+                            (crc >> 1) ^ 0x82F63B78
+                        } else {
+                            crc >> 1
+                        };
                     }
                 }
                 format!("{:08x}", !crc)
             }
             "crc64" => {
-                // ISO 3309 polynomial 0xD800000000000000
+                // ECMA-182 polynomial 0x42F0E1EBA9EA3693
                 let mut crc: u64 = 0xFFFFFFFFFFFFFFFF;
                 for &b in &bytes {
                     crc ^= (b as u64) << 56;
@@ -99,10 +110,8 @@ impl Operation for ChecksumOp {
                 let mut sum2: u32 = 0xFFFF;
                 let mut i = 0;
                 while i < bytes.len() {
-                    let mut tlen = bytes.len() - i;
-                    if tlen > 360 {
-                        tlen = 360;
-                    }
+                    let remaining_words = (bytes.len() - i).div_ceil(2);
+                    let tlen = remaining_words.min(360);
                     for _ in 0..tlen {
                         let word = if i + 1 < bytes.len() {
                             ((bytes[i] as u32) << 8) | (bytes[i + 1] as u32)

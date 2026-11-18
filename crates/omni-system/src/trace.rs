@@ -1,6 +1,6 @@
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniError, OmniResult, Operation,
-    OperationCategory, OperationManifest,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
+    Operation, OperationCategory, OperationManifest,
 };
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
@@ -25,9 +25,16 @@ impl Operation for SystemTraceOp {
             OperationCategory::SystemDiagnostics,
         )
         .with_types(vec![DataType::Text], vec![DataType::Json])
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec!["system".into(), "strace".into(), "ebpf".into(), "trace".into()])
     }
 
-    async fn execute(&self, input: DataPayload, _config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
+    async fn execute(
+        &self,
+        input: DataPayload,
+        _config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
         let text = input.into_text().unwrap_or_default();
         let mut stats: HashMap<String, SyscallStat> = HashMap::new();
         let mut open_fds: HashSet<i32> = HashSet::new();
@@ -45,18 +52,31 @@ impl Operation for SystemTraceOp {
             if let Some(open_paren) = trimmed.find('(') {
                 let call_name = trimmed[..open_paren].trim().to_string();
 
-                // Extract duration if present at end <0.000045>
-                let duration_us = if let (Some(start_angle), Some(end_angle)) = (trimmed.rfind('<'), trimmed.rfind('>')) {
+                // Extract duration if present at end <0.000045> (rejecting NaN / Inf / negative)
+                let duration_us = if let (Some(start_angle), Some(end_angle)) =
+                    (trimmed.rfind('<'), trimmed.rfind('>'))
+                {
                     if start_angle < end_angle {
-                        trimmed[start_angle + 1..end_angle].parse::<f64>().unwrap_or(0.0) * 1_000_000.0
-                    } else { 0.0 }
-                } else { 0.0 };
+                        trimmed[start_angle + 1..end_angle]
+                            .parse::<f64>()
+                            .ok()
+                            .filter(|v| v.is_finite() && *v >= 0.0)
+                            .unwrap_or(0.0)
+                            * 1_000_000.0
+                    } else {
+                        0.0
+                    }
+                } else {
+                    0.0
+                };
 
                 // Extract return value: after '='
                 let is_error = trimmed.contains("= -1");
 
                 // FD tracking: open, openat, socket vs close
-                if (call_name == "open" || call_name == "openat" || call_name == "socket") && !is_error {
+                if (call_name == "open" || call_name == "openat" || call_name == "socket")
+                    && !is_error
+                {
                     if let Some(eq_idx) = trimmed.find('=') {
                         let ret_part = trimmed[eq_idx + 1..].trim();
                         let fd_str = ret_part.split_whitespace().next().unwrap_or("");
@@ -89,7 +109,9 @@ impl Operation for SystemTraceOp {
         }
 
         if total_lines == 0 {
-            return Err(OmniError::InvalidInput("No valid syscall trace lines found in input".into()));
+            return Err(OmniError::InvalidInput(
+                "No valid syscall trace lines found in input".into(),
+            ));
         }
 
         for &fd in &open_fds {
@@ -99,7 +121,10 @@ impl Operation for SystemTraceOp {
 
         let mut syscall_summary = Vec::new();
         for (name, mut s) in stats {
-            s.times_us.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            if s.times_us.is_empty() {
+                continue;
+            }
+            s.times_us.sort_by(f64::total_cmp);
             let p50 = s.times_us[s.times_us.len() / 2];
             let p95_idx = ((s.times_us.len() as f64) * 0.95) as usize;
             let p95 = s.times_us[p95_idx.min(s.times_us.len() - 1)];

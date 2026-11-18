@@ -1,4 +1,4 @@
-use iced_x86::{Decoder, DecoderOptions, FlowControl, Formatter, IntelFormatter, Instruction};
+use iced_x86::{Decoder, DecoderOptions, FlowControl, Formatter, Instruction, IntelFormatter};
 use omni_core::{
     async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
     Operation, OperationCategory, OperationManifest,
@@ -25,14 +25,17 @@ fn disassemble_x86_iced(bytes: &[u8], bitness: u32, base_ip: u64) -> Vec<Decoded
     let mut instr = Instruction::default();
 
     while decoder.can_decode() {
+        let start = decoder.position();
         decoder.decode_out(&mut instr);
+        let end = decoder.position().min(bytes.len());
         output.clear();
         formatter.format(&instr, &mut output);
 
-        let start = (instr.ip() - base_ip) as usize;
-        let len = instr.len();
-        let end = start.saturating_add(len).min(bytes.len());
-        let raw_hex = hex::encode(&bytes[start..end]);
+        let raw_hex = if start <= end {
+            hex::encode(&bytes[start..end])
+        } else {
+            String::new()
+        };
 
         let flow = instr.flow_control();
         let is_branch = matches!(
@@ -98,7 +101,10 @@ impl Operation for DisassemblyEngineOp {
         _ctx: &ExecutionContext,
     ) -> OmniResult<DataPayload> {
         let bytes = input.into_bytes();
-        let arch = config.get("arch").and_then(|v| v.as_str()).unwrap_or("x86_64");
+        let arch = config
+            .get("arch")
+            .and_then(|v| v.as_str())
+            .unwrap_or("x86_64");
         let bitness = match arch.to_lowercase().as_str() {
             "x86_64" | "x64" | "amd64" | "64" => 64,
             "x86" | "x86_32" | "i386" | "32" => 32,
@@ -110,7 +116,10 @@ impl Operation for DisassemblyEngineOp {
                 )));
             }
         };
-        let base_ip = config.get("base_addr").and_then(|v| v.as_u64()).unwrap_or(0);
+        let base_ip = config
+            .get("base_addr")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
         let max_instructions = config
             .get("limit")
             .and_then(|v| v.as_u64())

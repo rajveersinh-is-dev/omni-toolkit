@@ -231,10 +231,14 @@ fn validate_scale(scale: &str) -> OmniResult<String> {
 }
 
 fn validate_bitrate(bitrate: &str) -> OmniResult<&str> {
-    if bitrate.len() >= 2 && bitrate.len() <= 8 {
-        let (num, suffix) = bitrate.split_at(bitrate.len() - 1);
-        if (suffix == "k" || suffix == "M") && num.chars().all(|c| c.is_ascii_digit()) {
-            return Ok(bitrate);
+    if bitrate.is_ascii() && bitrate.len() >= 2 && bitrate.len() <= 8 {
+        let num = bitrate
+            .strip_suffix('k')
+            .or_else(|| bitrate.strip_suffix('M'));
+        if let Some(digits) = num {
+            if !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()) {
+                return Ok(bitrate);
+            }
         }
     }
     Err(OmniError::InvalidInput(format!(
@@ -253,7 +257,11 @@ pub fn detect_ffmpeg_binary(custom_path: Option<&str>) -> Option<PathBuf> {
         return None;
     }
 
-    let bin_name = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };
+    let bin_name = if cfg!(windows) {
+        "ffmpeg.exe"
+    } else {
+        "ffmpeg"
+    };
     let path_var = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&path_var) {
         let candidate = dir.join(bin_name);
@@ -315,7 +323,9 @@ impl Operation for MediaTranscodeOp {
         )?;
         let crf = config.get("crf").and_then(|v| v.as_u64()).unwrap_or(23);
         if crf > 63 {
-            return Err(OmniError::InvalidInput("CRF must be between 0 and 63".into()));
+            return Err(OmniError::InvalidInput(
+                "CRF must be between 0 and 63".into(),
+            ));
         }
         let preset = validate_preset(
             config
@@ -422,8 +432,7 @@ impl Operation for MediaTranscodeOp {
             ));
         }
 
-        let work_dir =
-            std::env::temp_dir().join(format!("omni_ffmpeg_{}", uuid::Uuid::new_v4()));
+        let work_dir = std::env::temp_dir().join(format!("omni_ffmpeg_{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&work_dir).map_err(|e| OmniError::Io(e.to_string()))?;
         let _guard = TempDirGuard(work_dir.clone());
 
@@ -479,12 +488,12 @@ impl Operation for MediaTranscodeOp {
             });
         }
 
-        let transcoded = tokio::fs::read(&out_file).await.map_err(|e| {
-            OmniError::Execution {
+        let transcoded = tokio::fs::read(&out_file)
+            .await
+            .map_err(|e| OmniError::Execution {
                 operation: "media.transcode".into(),
                 message: format!("Failed to read transcoded output artifact: {e}"),
-            }
-        })?;
+            })?;
 
         if transcoded.is_empty() {
             return Err(OmniError::Execution {

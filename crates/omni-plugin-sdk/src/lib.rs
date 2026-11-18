@@ -51,7 +51,12 @@ mod tests {
 
     #[test]
     fn test_plugin_manifest_serialization() {
-        let manifest = PluginManifest::new("custom.rot13", "Custom ROT13 Plugin", "1.0.0", PluginKind::Wasm);
+        let manifest = PluginManifest::new(
+            "custom.rot13",
+            "Custom ROT13 Plugin",
+            "1.0.0",
+            PluginKind::Wasm,
+        );
         let json = serde_json::to_string(&manifest).unwrap();
         assert!(json.contains("custom.rot13"));
         let de: PluginManifest = serde_json::from_str(&json).unwrap();

@@ -1,6 +1,6 @@
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniError, OmniResult, Operation,
-    OperationCategory, OperationManifest,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
+    Operation, OperationCategory, OperationManifest,
 };
 use serde_json::{json, Value};
 use std::net::Ipv4Addr;
@@ -14,69 +14,106 @@ impl Operation for IpCalcOp {
         OperationManifest::new(
             "net.ip_calc",
             "CIDR & Subnet Calculator",
-            "Calculates IPv4/IPv6 network masks, broadcast addresses, usable host ranges, and performs subnet splitting/aggregation",
+            "Calculates IPv4 network masks, broadcast addresses, usable host ranges, reverse PTRs, and performs subnet splitting",
             OperationCategory::Networking,
         )
         .with_types(vec![DataType::Text, DataType::Json], vec![DataType::Json])
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec!["network".into(), "cidr".into(), "subnet".into(), "ipv4".into()])
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
-        let cidr_str = config.get("cidr")
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
+        let cidr_str = config
+            .get("cidr")
             .and_then(|v| v.as_str())
             .unwrap_or_else(|| input.as_str().ok().unwrap_or("192.168.1.0/24"));
 
         let parts: Vec<&str> = cidr_str.trim().split('/').collect();
-        if parts.is_empty() {
-            return Err(OmniError::InvalidInput("Empty CIDR input".into()));
+        if parts.is_empty() || parts.len() > 2 {
+            return Err(OmniError::InvalidInput(
+                "CIDR input must be '<ipv4>' or '<ipv4>/<prefix>'".into(),
+            ));
         }
 
         let ip_str = parts[0];
-        let prefix: u32 = if parts.len() > 1 {
-            parts[1].parse().map_err(|_| OmniError::InvalidInput("Invalid prefix length".into()))?
+        let prefix: u32 = if parts.len() == 2 {
+            parts[1]
+                .parse()
+                .map_err(|_| OmniError::InvalidInput("Invalid prefix length".into()))?
         } else {
             32
         };
 
         if prefix > 32 {
-            return Err(OmniError::InvalidInput("IPv4 prefix must be between 0 and 32".into()));
+            return Err(OmniError::InvalidInput(
+                "IPv4 prefix must be between 0 and 32".into(),
+            ));
         }
 
         let ip = Ipv4Addr::from_str(ip_str)
             .map_err(|e| OmniError::InvalidInput(format!("Invalid IPv4 address: {e}")))?;
 
         let ip_u32 = u32::from(ip);
-        let mask_u32 = if prefix == 0 { 0 } else { !0u32 << (32 - prefix) };
+        let mask_u32 = if prefix == 0 {
+            0
+        } else {
+            !0u32 << (32 - prefix)
+        };
         let wildcard_u32 = !mask_u32;
         let network_u32 = ip_u32 & mask_u32;
         let broadcast_u32 = network_u32 | wildcard_u32;
 
         let total_hosts = if prefix >= 31 {
-            if prefix == 32 { 1 } else { 2 }
+            if prefix == 32 {
+                1
+            } else {
+                2
+            }
         } else {
-            2u64.pow(32 - prefix)
+            1u64 << (32 - prefix)
         };
 
         let usable_hosts = if prefix >= 31 {
-            if prefix == 32 { 1 } else { 2 }
+            if prefix == 32 {
+                1
+            } else {
+                2
+            }
         } else {
             total_hosts - 2
         };
 
-        let first_usable_u32 = if prefix >= 31 { network_u32 } else { network_u32 + 1 };
-        let last_usable_u32 = if prefix >= 31 { broadcast_u32 } else { broadcast_u32 - 1 };
+        let first_usable_u32 = if prefix >= 31 {
+            network_u32
+        } else {
+            network_u32 + 1
+        };
+        let last_usable_u32 = if prefix >= 31 {
+            broadcast_u32
+        } else {
+            broadcast_u32 - 1
+        };
 
         let octets = ip.octets();
-        let reverse_ptr = format!("{}.{}.{}.{}.in-addr.arpa", octets[3], octets[2], octets[1], octets[0]);
+        let reverse_ptr = format!(
+            "{}.{}.{}.{}.in-addr.arpa",
+            octets[3], octets[2], octets[1], octets[0]
+        );
 
-        // Subnet splitting if requested
+        // Overflow-safe subnet splitting if requested
         let mut subnets = Vec::new();
         if let Some(target_prefix) = config.get("split_to_prefix").and_then(|v| v.as_u64()) {
-            let t_p = target_prefix as u32;
+            let t_p = u32::try_from(target_prefix).unwrap_or(u32::MAX);
             if t_p > prefix && t_p <= 32 {
-                let count = 2u32.pow(t_p - prefix);
-                let step = 2u32.pow(32 - t_p);
+                let count = 1u64 << (t_p - prefix);
+                let step = 1u64 << (32 - t_p);
                 for i in 0..count.min(64) {
-                    let sub_net = network_u32 + (i * step);
+                    let sub_net = network_u32.wrapping_add((i * step) as u32);
                     subnets.push(format!("{}/{}", Ipv4Addr::from(sub_net), t_p));
                 }
             }

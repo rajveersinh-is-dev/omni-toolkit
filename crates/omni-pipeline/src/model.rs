@@ -11,7 +11,9 @@ pub struct PipelineEdge {
 impl PipelineEdge {
     /// Returns the effective deterministic input key for this edge on the target node.
     pub fn effective_port(&self) -> &str {
-        self.input_port.as_deref().unwrap_or(self.from_node.as_str())
+        self.input_port
+            .as_deref()
+            .unwrap_or(self.from_node.as_str())
     }
 }
 

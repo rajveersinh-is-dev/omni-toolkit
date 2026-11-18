@@ -166,11 +166,33 @@ fn check_auth_header(req: &Request, expected_token: &str) -> bool {
     false
 }
 
-async fn auth_middleware(
-    State(state): State<AppState>,
-    req: Request,
-    next: Next,
-) -> Response {
+/// Percent-decodes an application/x-www-form-urlencoded query value (`%XX` and `+`).
+fn percent_decode_query_value(input: &str) -> Vec<u8> {
+    let bytes = input.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let (Some(hi), Some(lo)) = (
+                (bytes[i + 1] as char).to_digit(16),
+                (bytes[i + 2] as char).to_digit(16),
+            ) {
+                out.push(((hi << 4) | lo) as u8);
+                i += 3;
+                continue;
+            }
+        } else if bytes[i] == b'+' {
+            out.push(b' ');
+            i += 1;
+            continue;
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    out
+}
+
+async fn auth_middleware(State(state): State<AppState>, req: Request, next: Next) -> Response {
     let Some(ref expected) = state.config.auth_token else {
         return next.run(req).await;
     };
@@ -184,13 +206,16 @@ async fn auth_middleware(
         return next.run(req).await;
     }
 
-    // For WebSocket endpoints, also allow `?token=<secret>` query parameter
+    // For WebSocket endpoints, also allow `?token=<secret>` query parameter (URL-decoded)
     if path == "/api/v1/ws/jobs" {
         if let Some(query_str) = req.uri().query() {
             for pair in query_str.split('&') {
                 if let Some((k, v)) = pair.split_once('=') {
-                    if k == "token" && constant_time_eq(v.as_bytes(), expected.as_bytes()) {
-                        return next.run(req).await;
+                    if k == "token" {
+                        let decoded = percent_decode_query_value(v);
+                        if constant_time_eq(&decoded, expected.as_bytes()) {
+                            return next.run(req).await;
+                        }
                     }
                 }
             }
@@ -297,7 +322,10 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/pipelines", post(save_pipeline_handler))
         .route("/api/v1/pipelines/{id}", get(get_pipeline_handler))
         .route("/api/v1/pipelines/{id}", delete(delete_pipeline_handler))
-        .route("/api/v1/pipelines/validate", post(validate_pipeline_handler))
+        .route(
+            "/api/v1/pipelines/validate",
+            post(validate_pipeline_handler),
+        )
         .route("/api/v1/pipelines/execute", post(execute_pipeline_handler))
         .route("/api/v1/jobs", get(list_jobs_handler))
         .route("/api/v1/jobs/{id}", get(get_job_handler))
@@ -933,7 +961,10 @@ mod tests {
             .body(axum::body::Body::empty())
             .unwrap();
         let bad_resp = app.oneshot(bad_req).await.unwrap();
-        assert!(bad_resp.headers().get("access-control-allow-origin").is_none());
+        assert!(bad_resp
+            .headers()
+            .get("access-control-allow-origin")
+            .is_none());
     }
 
     #[tokio::test]
@@ -1001,7 +1032,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("omni_api_fe_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("index.html"), b"<!doctype html><title>OMNI</title>").unwrap();
+        std::fs::write(
+            dir.join("index.html"),
+            b"<!doctype html><title>OMNI</title>",
+        )
+        .unwrap();
 
         let cfg = ApiConfig::default()
             .with_auth_token("ws-secret")
@@ -1039,6 +1074,21 @@ mod tests {
             .unwrap();
         let bad_job_resp = app.oneshot(bad_job_req).await.unwrap();
         assert_eq!(bad_job_resp.status(), StatusCode::BAD_REQUEST);
+
+        // 4. WebSocket with URL-encoded Base64 special chars in ?token= must pass auth_middleware!
+        let special_cfg = ApiConfig::default().with_auth_token("sec+ret/123=");
+        let special_app = create_router(make_state(special_cfg));
+        let encoded_ws_req = Request::builder()
+            .uri("/api/v1/ws/jobs?token=sec%2Bret%2F123%3D&job_id=../bad")
+            .header("connection", "upgrade")
+            .header("upgrade", "websocket")
+            .header("sec-websocket-version", "13")
+            .header("sec-websocket-key", "dGhlIHNhbXBsZSBub25jZQ==")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let encoded_resp = special_app.oneshot(encoded_ws_req).await.unwrap();
+        // Passing auth_middleware reaches ws_handler's job_id validation (400), NOT 401!
+        assert_eq!(encoded_resp.status(), StatusCode::BAD_REQUEST);
 
         let _ = std::fs::remove_dir_all(&dir);
     }

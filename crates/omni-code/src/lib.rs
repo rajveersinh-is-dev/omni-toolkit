@@ -73,7 +73,59 @@ mod tests {
 
         let json = res.into_json().unwrap();
         assert_eq!(json["functions_detected"][0], "calculateHash");
-        assert!(json["variables_detected"].as_array().unwrap().iter().any(|v| v == "secret"));
-        assert!(json["variables_detected"].as_array().unwrap().iter().any(|v| v == "count"));
+        assert!(json["variables_detected"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|v| v == "secret"));
+        assert!(json["variables_detected"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|v| v == "count"));
+    }
+
+    #[tokio::test]
+    async fn test_code_minify_and_packer_oom_guard() {
+        let op = AstCodeAnalysisOp;
+        let ctx = ExecutionContext::new("t_min");
+
+        let min = op
+            .execute(
+                DataPayload::text("// header\nfn a() {\n /* block */ return 1;\n}"),
+                serde_json::json!({ "action": "minify" }),
+                &ctx,
+            )
+            .await
+            .unwrap();
+        assert_eq!(min.as_str().unwrap(), "fn a() { return 1; }");
+
+        // Adversarial huge c=999999999 must be rejected without allocating OOM HashMap
+        let evil_packed = "eval(function(p,a,c,k,e,d){return p}('0',36,999999999,'a'.split('|')))";
+        assert!(Deobfuscator::unpack_eval_packer(evil_packed).is_none());
+
+        // Minify MUST preserve URLs and comment-like tokens inside string literals
+        let with_url = "const url = \"https://example.com/a/*b*/\"; // trailing comment\nconst s = 'http://x.y'; /* real block */";
+        let min_url = op
+            .execute(
+                DataPayload::text(with_url),
+                serde_json::json!({ "action": "minify" }),
+                &ctx,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            min_url.as_str().unwrap(),
+            "const url = \"https://example.com/a/*b*/\"; const s = 'http://x.y';"
+        );
+
+        // Dean Edwards Packer base-62 key encoding (index 36 = 'A')
+        let mut words = vec!["w"; 36];
+        words.push("SECRET_FN");
+        let dict = words.join("|");
+        let packed_62 =
+            format!("eval(function(p,a,c,k,e,d){{return p}}('A()',62,37,'{dict}'.split('|')))");
+        let unpacked = Deobfuscator::unpack_eval_packer(&packed_62).unwrap();
+        assert_eq!(unpacked, "SECRET_FN()");
     }
 }

@@ -93,7 +93,8 @@ impl Operation for ArchiveToolkitOp {
                 })?;
 
                 let entry_name = file.name().to_string();
-                let path_safe = safe_join_no_symlinks(sandbox_virtual, Path::new(&entry_name)).is_ok();
+                let path_safe =
+                    safe_join_no_symlinks(sandbox_virtual, Path::new(&entry_name)).is_ok();
                 let uncompressed_size = file.size();
                 let compressed_size = file.compressed_size();
                 total_uncompressed = total_uncompressed.saturating_add(uncompressed_size);
@@ -136,7 +137,8 @@ impl Operation for ArchiveToolkitOp {
                         .path()
                         .map(|p| p.display().to_string())
                         .unwrap_or_default();
-                    let path_safe = safe_join_no_symlinks(sandbox_virtual, Path::new(&path)).is_ok();
+                    let path_safe =
+                        safe_join_no_symlinks(sandbox_virtual, Path::new(&path)).is_ok();
                     let size = entry.size();
                     total_uncompressed = total_uncompressed.saturating_add(size);
 

@@ -9,19 +9,13 @@ pub enum OmniError {
     InvalidInput(String),
 
     #[error("Execution error in {operation}: {message}")]
-    Execution {
-        operation: String,
-        message: String,
-    },
+    Execution { operation: String, message: String },
 
     #[error("Operation not found: {0}")]
     NotFound(String),
 
     #[error("Type mismatch: expected {expected}, found {found}")]
-    TypeMismatch {
-        expected: String,
-        found: String,
-    },
+    TypeMismatch { expected: String, found: String },
 
     #[error("Pipeline error: {0}")]
     Pipeline(String),

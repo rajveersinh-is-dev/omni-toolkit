@@ -111,4 +111,102 @@ mod tests {
             .await
             .is_err());
     }
+
+    #[tokio::test]
+    async fn test_documents_adversarial_slice_and_recursion_guards() {
+        let ctx = ExecutionContext::new("t_doc_adv");
+
+        // 1. Reversed brackets "]A[" / "}A{" / ")A(" previously panicked in parse_node_token!
+        let diag_op = DiagramCompilerOp;
+        for evil in ["]A[ --> B", "}A{ --> B", ")A( --> B", "][ --> ()"] {
+            let res = diag_op
+                .execute(
+                    DataPayload::text(evil),
+                    serde_json::json!({ "type": "mermaid" }),
+                    &ctx,
+                )
+                .await;
+            assert!(res.is_ok(), "reversed bracket input failed: {evil}");
+        }
+
+        // 2. Deeply nested braces / \sqrt previously caused stack overflow in MathTypesetOp!
+        let math_op = MathTypesetOp;
+        let deep_braces = format!("{}{}", "{".repeat(500), "}".repeat(500));
+        assert!(math_op
+            .execute(
+                DataPayload::text(deep_braces),
+                serde_json::json!({ "format": "mathml" }),
+                &ctx,
+            )
+            .await
+            .is_err());
+
+        let deep_sqrt = format!("{}x", r"\sqrt ".repeat(200));
+        assert!(math_op
+            .execute(
+                DataPayload::text(deep_sqrt),
+                serde_json::json!({ "format": "svg" }),
+                &ctx,
+            )
+            .await
+            .is_err());
+
+        // Escaped braces \{ \} must render cleanly
+        let escaped = math_op
+            .execute(
+                DataPayload::text(r"\{ x \}"),
+                serde_json::json!({ "format": "mathml" }),
+                &ctx,
+            )
+            .await
+            .unwrap()
+            .into_text()
+            .unwrap();
+        assert!(escaped.contains("<mo>{</mo>") && escaped.contains("<mo>}</mo>"));
+
+        // 3. DocumentTranscodeOp LaTeX, Man, and error handling
+        let trans = DocumentTranscodeOp;
+        let latex = trans
+            .execute(
+                DataPayload::text("# Intro\n## Details\nBody"),
+                serde_json::json!({ "from": "markdown", "to": "latex" }),
+                &ctx,
+            )
+            .await
+            .unwrap()
+            .into_text()
+            .unwrap();
+        assert!(latex.contains(r"\section{Intro}") && latex.contains(r"\subsection{Details}"));
+
+        let man = trans
+            .execute(
+                DataPayload::text("# Name\n## Synopsis"),
+                serde_json::json!({ "from": "md", "to": "man" }),
+                &ctx,
+            )
+            .await
+            .unwrap()
+            .into_text()
+            .unwrap();
+        assert!(man.contains(".SH NAME") && man.contains(".SS Synopsis"));
+
+        assert!(trans
+            .execute(
+                DataPayload::text("hi"),
+                serde_json::json!({ "from": "markdown", "to": "docx" }),
+                &ctx,
+            )
+            .await
+            .is_err());
+
+        // 4. FontToolkitOp malformed input rejection
+        assert!(FontToolkitOp
+            .execute(
+                DataPayload::bytes(b"not a ttf font"),
+                serde_json::json!({}),
+                &ctx
+            )
+            .await
+            .is_err());
+    }
 }

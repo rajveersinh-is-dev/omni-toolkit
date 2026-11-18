@@ -55,7 +55,11 @@ mod tests {
 
         // Generate IDs
         let res = op
-            .execute(DataPayload::text(""), serde_json::json!({ "action": "generate" }), &ctx)
+            .execute(
+                DataPayload::text(""),
+                serde_json::json!({ "action": "generate" }),
+                &ctx,
+            )
             .await
             .unwrap();
 
@@ -120,5 +124,105 @@ close(3) = 0 <0.000010>
         let json = res.into_json().unwrap();
         assert_eq!(json["has_fd_leaks"], true);
         assert_eq!(json["potential_fd_leaks"][0], 4); // FD 4 was opened but never closed
+    }
+
+    #[tokio::test]
+    async fn test_system_adversarial_edge_cases() {
+        let ctx = ExecutionContext::new("t_sys_edge");
+
+        // 1. Color UTF-8 6-byte non-ASCII regression ("€€" is 6 bytes; MUST NOT panic on slice!)
+        let color_op = ColorToolkitOp;
+        assert!(color_op
+            .execute(
+                DataPayload::text(""),
+                serde_json::json!({ "fg": "€€", "bg": "#FFFFFF" }),
+                &ctx
+            )
+            .await
+            .is_err());
+        let ok_color = color_op
+            .execute(
+                DataPayload::text(""),
+                serde_json::json!({ "fg": "#112233", "bg": "#FFFFFF" }),
+                &ctx,
+            )
+            .await
+            .unwrap()
+            .into_json()
+            .unwrap();
+        assert!(
+            ok_color["color_blindness_simulation_fg"]["tritanopia_blue_blind"]
+                .as_str()
+                .is_some()
+        );
+
+        // 2. Cron adversarial DoS range rejected immediately + leap day + Sunday=7 + stepped range
+        let cron_op = CronEngineOp;
+        assert!(cron_op
+            .execute(
+                DataPayload::text("0-4294967295 * * * *"),
+                serde_json::json!({}),
+                &ctx
+            )
+            .await
+            .is_err());
+        let leap = cron_op
+            .execute(DataPayload::text("0 0 29 2 *"), serde_json::json!({}), &ctx)
+            .await
+            .unwrap()
+            .into_json()
+            .unwrap();
+        assert_eq!(leap["next_20_executions"].as_array().unwrap().len(), 20);
+        let sun7 = cron_op
+            .execute(
+                DataPayload::text("0-30/15 12 * * 7"),
+                serde_json::json!({}),
+                &ctx,
+            )
+            .await
+            .unwrap()
+            .into_json()
+            .unwrap();
+        assert_eq!(sun7["next_20_executions"].as_array().unwrap().len(), 20);
+        // Sunday=7 with step ("7/2") must normalize to 0/2 (Sun, Tue, Thu, Sat) instead of empty mask!
+        let sun7_step = cron_op
+            .execute(
+                DataPayload::text("0 12 * * 7/2"),
+                serde_json::json!({}),
+                &ctx,
+            )
+            .await
+            .unwrap()
+            .into_json()
+            .unwrap();
+        assert_eq!(
+            sun7_step["next_20_executions"].as_array().unwrap().len(),
+            20
+        );
+
+        // 3. Trace parser NaN / Inf duration regression (MUST NOT panic in sort!)
+        let trace_op = SystemTraceOp;
+        let bad_trace = "read(3, \"x\", 1) = 1 <NaN>\nread(3, \"y\", 1) = 1 <inf>\nread(3, \"z\", 1) = 1 <0.001>\n";
+        let tres = trace_op
+            .execute(DataPayload::text(bad_trace), serde_json::json!({}), &ctx)
+            .await
+            .unwrap()
+            .into_json()
+            .unwrap();
+        assert_eq!(tres["total_trace_lines"], 3);
+
+        // 4. Snowflake u64::MAX epoch overflow regression
+        let id_op = UniversalIdsOp;
+        let sf = id_op
+            .execute(
+                DataPayload::text(""),
+                serde_json::json!({ "action": "decode_snowflake", "id": "175928847299117063", "epoch_ms": u64::MAX }),
+                &ctx,
+            )
+            .await
+            .unwrap()
+            .into_json()
+            .unwrap();
+        assert_eq!(sf["timestamp_ms"], u64::MAX);
     }
 }

@@ -71,7 +71,7 @@ impl Operation for ModelInspectorOp {
         let len_arr: [u8; 8] = bytes[0..8]
             .try_into()
             .map_err(|_| OmniError::InvalidInput("Malformed Safetensors header length".into()))?;
-        let header_len = u64::from_le_bytes(len_arr) as usize;
+        let header_len = usize::try_from(u64::from_le_bytes(len_arr)).unwrap_or(usize::MAX);
         if header_len > 0
             && header_len < 100_000_000
             && 8usize.saturating_add(header_len) <= bytes.len()
@@ -120,11 +120,13 @@ impl Operation for ModelInspectorOp {
                         }
                     }
 
-                    let total_billions = (total_params as f64 / 1_000_000_000.0 * 100.0).round() / 100.0;
+                    let total_billions =
+                        (total_params as f64 / 1_000_000_000.0 * 100.0).round() / 100.0;
                     let native_weights_gb =
                         (total_weight_bytes as f64 / 1_073_741_824.0 * 1000.0).round() / 1000.0;
                     let estimated_fp16_gb =
-                        ((total_params.saturating_mul(2)) as f64 / 1_073_741_824.0 * 1000.0).round()
+                        ((total_params.saturating_mul(2)) as f64 / 1_073_741_824.0 * 1000.0)
+                            .round()
                             / 1000.0;
                     let estimated_q4_gb =
                         ((total_params / 2) as f64 / 1_073_741_824.0 * 1000.0).round() / 1000.0;

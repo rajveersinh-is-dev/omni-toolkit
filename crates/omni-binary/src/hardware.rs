@@ -1,6 +1,6 @@
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniError, OmniResult, Operation,
-    OperationCategory, OperationManifest,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
+    Operation, OperationCategory, OperationManifest,
 };
 use serde_json::{json, Value};
 
@@ -16,11 +16,28 @@ impl Operation for HardwareSerialOp {
             OperationCategory::BinaryAnalysis,
         )
         .with_types(vec![DataType::Bytes, DataType::Text], vec![DataType::Json])
+        .with_status(FeatureStatus::Verified)
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
-        let baud_rate = config.get("baud").and_then(|v| v.as_u64()).unwrap_or(115200);
-        let parity = config.get("parity").and_then(|v| v.as_str()).unwrap_or("none");
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
+        let baud_rate = config
+            .get("baud")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(115200);
+        if baud_rate == 0 {
+            return Err(OmniError::Validation(
+                "UART 'baud' rate must be greater than zero".into(),
+            ));
+        }
+        let parity = config
+            .get("parity")
+            .and_then(|v| v.as_str())
+            .unwrap_or("none");
         let bytes = input.into_bytes();
 
         let mut parity_errors = 0;
@@ -51,7 +68,10 @@ impl Operation for HardwareSerialOp {
 
         let bit_time_us = (1_000_000.0 / baud_rate as f64 * 100.0).round() / 100.0;
         let frame_bits = if parity == "none" { 10 } else { 11 }; // 1 start + 8 data + (1 parity) + 1 stop
-        let total_time_ms = (bytes.len() as f64 * frame_bits as f64 * (1.0 / baud_rate as f64) * 1000.0 * 100.0).round() / 100.0;
+        let total_time_ms =
+            (bytes.len() as f64 * frame_bits as f64 * (1.0 / baud_rate as f64) * 1000.0 * 100.0)
+                .round()
+                / 100.0;
 
         Ok(DataPayload::json(json!({
             "configured_baud_rate": baud_rate,
@@ -78,15 +98,23 @@ impl Operation for HardwareCanOp {
             OperationCategory::BinaryAnalysis,
         )
         .with_types(vec![DataType::Text], vec![DataType::Json])
+        .with_status(FeatureStatus::Verified)
     }
 
-    async fn execute(&self, input: DataPayload, _config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
+    async fn execute(
+        &self,
+        input: DataPayload,
+        _config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
         let text = input.into_text().unwrap_or_default();
         let mut frames = Vec::new();
 
         for line in text.lines() {
             let trimmed = line.trim();
-            if trimmed.is_empty() { continue; }
+            if trimmed.is_empty() {
+                continue;
+            }
 
             // Typical candump line:
             // (1600000000.123456) can0 123#DEADBEEF
@@ -106,19 +134,26 @@ impl Operation for HardwareCanOp {
                     if (can_id == 0x7E8 || can_id == 0x7DF) && payload.len() >= 3 {
                         let service = payload[1];
                         let pid = payload[2];
-                        if service == 0x41 || service == 0x01 { // Show current data
+                        if service == 0x41 || service == 0x01 {
+                            // Show current data
                             decoded_obd = match pid {
                                 0x05 if payload.len() >= 4 => {
                                     let temp_c = (payload[3] as i32) - 40;
-                                    Some(json!({ "pid": "0x05 Engine Coolant Temp", "value": format!("{} °C", temp_c) }))
+                                    Some(
+                                        json!({ "pid": "0x05 Engine Coolant Temp", "value": format!("{} °C", temp_c) }),
+                                    )
                                 }
                                 0x0C if payload.len() >= 5 => {
                                     let rpm = ((payload[3] as u32 * 256) + payload[4] as u32) / 4;
-                                    Some(json!({ "pid": "0x0C Engine RPM", "value": format!("{} RPM", rpm) }))
+                                    Some(
+                                        json!({ "pid": "0x0C Engine RPM", "value": format!("{} RPM", rpm) }),
+                                    )
                                 }
                                 0x0D if payload.len() >= 4 => {
                                     let speed_kmh = payload[3];
-                                    Some(json!({ "pid": "0x0D Vehicle Speed", "value": format!("{} km/h", speed_kmh) }))
+                                    Some(
+                                        json!({ "pid": "0x0D Vehicle Speed", "value": format!("{} km/h", speed_kmh) }),
+                                    )
                                 }
                                 _ => None,
                             };
@@ -138,7 +173,9 @@ impl Operation for HardwareCanOp {
         }
 
         if frames.is_empty() {
-            return Err(OmniError::InvalidInput("No valid CAN frames found in candump input".into()));
+            return Err(OmniError::InvalidInput(
+                "No valid CAN frames found in candump input".into(),
+            ));
         }
 
         Ok(DataPayload::json(json!({

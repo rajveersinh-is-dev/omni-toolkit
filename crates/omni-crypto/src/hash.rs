@@ -1,13 +1,15 @@
 use blake2::{Blake2b512, Blake2s256};
 use md5::Md5;
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniResult, Operation,
-    OperationCategory, OperationManifest,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
+    Operation, OperationCategory, OperationManifest,
 };
 use ripemd::Ripemd160;
 use serde_json::Value;
 use sha2::{Digest, Sha224, Sha256, Sha384, Sha512, Sha512_224, Sha512_256};
 use sha3::{digest::Update, Sha3_224, Sha3_256, Sha3_384, Sha3_512, Shake128, Shake256};
+
+const MAX_XOF_BYTES: u64 = 1_048_576; // 1 MiB cap for SHAKE128/SHAKE256 output
 
 pub struct GenericHashOp {
     pub algorithm: String,
@@ -17,15 +19,29 @@ pub struct GenericHashOp {
 impl Operation for GenericHashOp {
     fn manifest(&self) -> OperationManifest {
         OperationManifest::new(
-            format!("crypto.hash.{}", self.algorithm.to_lowercase().replace('/', "_")),
+            format!(
+                "crypto.hash.{}",
+                self.algorithm.to_lowercase().replace('/', "_")
+            ),
             format!("Hash ({})", self.algorithm.to_uppercase()),
             format!("Computes cryptographic hash using {}", self.algorithm),
             OperationCategory::Cryptography,
         )
         .with_types(vec![DataType::Bytes, DataType::Text], vec![DataType::Text])
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec![
+            "crypto".into(),
+            "hash".into(),
+            self.algorithm.to_lowercase(),
+        ])
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
         let bytes = input.into_bytes();
         let digest_hex = match self.algorithm.to_lowercase().as_str() {
             // Legacy
@@ -53,22 +69,34 @@ impl Operation for GenericHashOp {
             "shake128" => {
                 use sha3::digest::ExtendableOutput;
                 use sha3::digest::XofReader;
+                let req_len = config.get("length").and_then(|v| v.as_u64()).unwrap_or(32);
+                if req_len == 0 || req_len > MAX_XOF_BYTES {
+                    return Err(OmniError::Validation(format!(
+                        "SHAKE128 length must be between 1 and {} bytes",
+                        MAX_XOF_BYTES
+                    )));
+                }
                 let mut hasher = Shake128::default();
                 hasher.update(&bytes);
                 let mut reader = hasher.finalize_xof();
-                let len = config.get("length").and_then(|v| v.as_u64()).unwrap_or(32) as usize;
-                let mut out = vec![0u8; len];
+                let mut out = vec![0u8; req_len as usize];
                 reader.read(&mut out);
                 hex::encode(out)
             }
             "shake256" => {
                 use sha3::digest::ExtendableOutput;
                 use sha3::digest::XofReader;
+                let req_len = config.get("length").and_then(|v| v.as_u64()).unwrap_or(64);
+                if req_len == 0 || req_len > MAX_XOF_BYTES {
+                    return Err(OmniError::Validation(format!(
+                        "SHAKE256 length must be between 1 and {} bytes",
+                        MAX_XOF_BYTES
+                    )));
+                }
                 let mut hasher = Shake256::default();
                 hasher.update(&bytes);
                 let mut reader = hasher.finalize_xof();
-                let len = config.get("length").and_then(|v| v.as_u64()).unwrap_or(64) as usize;
-                let mut out = vec![0u8; len];
+                let mut out = vec![0u8; req_len as usize];
                 reader.read(&mut out);
                 hex::encode(out)
             }

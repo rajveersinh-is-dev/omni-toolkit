@@ -113,8 +113,9 @@ fn execute_ml_kem(action: &str, config: &Value) -> OmniResult<DataPayload> {
                         "Missing 'encapsulation_key_hex' (or 'public_key_hex') for ML-KEM encapsulate".into(),
                     )
                 })?;
-            let ek_raw = hex::decode(ek_hex.trim())
-                .map_err(|e| OmniError::InvalidInput(format!("Invalid encapsulation key hex: {e}")))?;
+            let ek_raw = hex::decode(ek_hex.trim()).map_err(|e| {
+                OmniError::InvalidInput(format!("Invalid encapsulation key hex: {e}"))
+            })?;
             let ek_arr: [u8; ml_kem_768::EK_LEN] = ek_raw.try_into().map_err(|v: Vec<u8>| {
                 OmniError::InvalidInput(format!(
                     "ML-KEM-768 encapsulation key must be {} bytes, got {}",
@@ -152,10 +153,13 @@ fn execute_ml_kem(action: &str, config: &Value) -> OmniResult<DataPayload> {
                 .get("ciphertext_hex")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| {
-                    OmniError::InvalidInput("Missing 'ciphertext_hex' for ML-KEM decapsulate".into())
+                    OmniError::InvalidInput(
+                        "Missing 'ciphertext_hex' for ML-KEM decapsulate".into(),
+                    )
                 })?;
-            let dk_raw = hex::decode(dk_hex.trim())
-                .map_err(|e| OmniError::InvalidInput(format!("Invalid decapsulation key hex: {e}")))?;
+            let dk_raw = hex::decode(dk_hex.trim()).map_err(|e| {
+                OmniError::InvalidInput(format!("Invalid decapsulation key hex: {e}"))
+            })?;
             let ct_raw = hex::decode(ct_hex.trim())
                 .map_err(|e| OmniError::InvalidInput(format!("Invalid ciphertext hex: {e}")))?;
             let dk_arr: [u8; ml_kem_768::DK_LEN] = dk_raw.try_into().map_err(|v: Vec<u8>| {
@@ -264,10 +268,12 @@ fn execute_ml_dsa(action: &str, msg: &[u8], config: &Value) -> OmniResult<DataPa
             let sk = ml_dsa_65::PrivateKey::try_from_bytes(sk_arr).map_err(|e| {
                 OmniError::InvalidInput(format!("Invalid ML-DSA-65 secret key: {e}"))
             })?;
-            let sig = sk.try_sign(msg, context).map_err(|e| OmniError::Execution {
-                operation: "ml_dsa_sign".into(),
-                message: e.to_string(),
-            })?;
+            let sig = sk
+                .try_sign(msg, context)
+                .map_err(|e| OmniError::Execution {
+                    operation: "ml_dsa_sign".into(),
+                    message: e.to_string(),
+                })?;
             Ok(DataPayload::json(json!({
                 "standard": "FIPS 204 (ML-DSA-65)",
                 "action": "sign",
@@ -321,10 +327,12 @@ fn execute_ml_dsa(action: &str, msg: &[u8], config: &Value) -> OmniResult<DataPa
                 operation: "ml_dsa_keygen".into(),
                 message: e.to_string(),
             })?;
-            let sig = sk.try_sign(msg, context).map_err(|e| OmniError::Execution {
-                operation: "ml_dsa_sign".into(),
-                message: e.to_string(),
-            })?;
+            let sig = sk
+                .try_sign(msg, context)
+                .map_err(|e| OmniError::Execution {
+                    operation: "ml_dsa_sign".into(),
+                    message: e.to_string(),
+                })?;
             let valid = pk.verify(msg, &sig, context);
             Ok(DataPayload::json(json!({
                 "standard": "FIPS 204 (ML-DSA-65)",
@@ -383,9 +391,8 @@ fn execute_slh_dsa(action: &str, msg: &[u8], config: &Value) -> OmniResult<DataP
                         v.len()
                     ))
                 })?;
-            let sk = slh_dsa_sha2_128f::PrivateKey::try_from_bytes(sk_arr).map_err(|e| {
-                OmniError::InvalidInput(format!("Invalid SLH-DSA secret key: {e}"))
-            })?;
+            let sk = slh_dsa_sha2_128f::PrivateKey::try_from_bytes(sk_arr)
+                .map_err(|e| OmniError::InvalidInput(format!("Invalid SLH-DSA secret key: {e}")))?;
             let sig = sk
                 .try_sign(msg, context, false)
                 .map_err(|e| OmniError::Execution {
@@ -432,9 +439,8 @@ fn execute_slh_dsa(action: &str, msg: &[u8], config: &Value) -> OmniResult<DataP
                         v.len()
                     ))
                 })?;
-            let pk = slh_dsa_sha2_128f::PublicKey::try_from_bytes(pk_arr).map_err(|e| {
-                OmniError::InvalidInput(format!("Invalid SLH-DSA public key: {e}"))
-            })?;
+            let pk = slh_dsa_sha2_128f::PublicKey::try_from_bytes(pk_arr)
+                .map_err(|e| OmniError::InvalidInput(format!("Invalid SLH-DSA public key: {e}")))?;
             let valid = pk.verify(msg, &sig_arr, context);
             Ok(DataPayload::json(json!({
                 "standard": "FIPS 205 (SLH-DSA-SHA2-128f)",

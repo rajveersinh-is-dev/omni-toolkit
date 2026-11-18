@@ -485,7 +485,7 @@ async function executeActiveTool() {
     const json = await res.json();
 
     if (json.success && json.output) {
-      displayOutput(json.output.data);
+      displayOutput(json.output);
       metricsEl.textContent = `Completed in ${elapsed} ms`;
     } else {
       lastOutputText = `Execution Error:\n${json.error || 'Unknown error'}`;
@@ -506,17 +506,26 @@ async function executeActiveTool() {
   }
 }
 
-function displayOutput(data) {
+function displayOutput(output) {
   const preEl = document.getElementById('output-pre');
   const hexEl = document.getElementById('output-hex');
 
-  const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  const isBytes = output && output.type === 'Bytes' && Array.isArray(output.data);
+  const data = output && typeof output === 'object' && 'data' in output ? output.data : output;
+
+  let text;
+  let bytes;
+  if (isBytes) {
+    bytes = new Uint8Array(data);
+    text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+  } else {
+    text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+    bytes = new TextEncoder().encode(text);
+  }
   lastOutputText = text;
   preEl.textContent = text;
 
   hexEl.textContent = '';
-  const encoder = new TextEncoder();
-  const bytes = encoder.encode(text);
   let hexDump = '';
   for (let i = 0; i < bytes.length; i += 16) {
     const chunk = bytes.slice(i, i + 16);

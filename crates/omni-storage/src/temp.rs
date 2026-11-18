@@ -16,7 +16,12 @@ impl TempFileManager {
         self.dir.path()
     }
 
-    pub fn create_temp_file(&self, prefix: &str, suffix: &str, content: &[u8]) -> OmniResult<PathBuf> {
+    pub fn create_temp_file(
+        &self,
+        prefix: &str,
+        suffix: &str,
+        content: &[u8],
+    ) -> OmniResult<PathBuf> {
         let filename = format!("{}_{}{}", prefix, uuid::Uuid::new_v4(), suffix);
         let file_path = self.dir.path().join(filename);
         std::fs::write(&file_path, content).map_err(|e| OmniError::Io(e.to_string()))?;

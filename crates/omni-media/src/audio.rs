@@ -1,6 +1,6 @@
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniError, OmniResult, Operation,
-    OperationCategory, OperationManifest,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
+    Operation, OperationCategory, OperationManifest,
 };
 use serde_json::{json, Value};
 
@@ -26,14 +26,23 @@ impl Operation for AudioLufsOp {
             OperationCategory::DocumentsAndMedia,
         )
         .with_types(vec![DataType::Bytes], vec![DataType::Json])
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec!["audio".into(), "lufs".into(), "ebur128".into()])
     }
 
-    async fn execute(&self, input: DataPayload, _config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
+    async fn execute(
+        &self,
+        input: DataPayload,
+        _config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
         let bytes = input.into_bytes();
         let samples = parse_pcm16_samples(&bytes);
 
         if samples.is_empty() {
-            return Err(OmniError::InvalidInput("No PCM audio samples provided".into()));
+            return Err(OmniError::InvalidInput(
+                "No PCM audio samples provided".into(),
+            ));
         }
 
         // True Peak measurement
@@ -58,7 +67,8 @@ impl Operation for AudioLufsOp {
         let mut y1 = 0.0;
         let mut y2 = 0.0;
         for (i, &x) in samples.iter().enumerate() {
-            let y = 1.53512486 * x - 2.69169619 * x1 + 1.19839281 * x2 + 1.69065929 * y1 - 0.73248077 * y2;
+            let y = 1.53512486 * x - 2.69169619 * x1 + 1.19839281 * x2 + 1.69065929 * y1
+                - 0.73248077 * y2;
             x2 = x1;
             x1 = x;
             y2 = y1;
@@ -83,8 +93,8 @@ impl Operation for AudioLufsOp {
         }
 
         // Block gating (400ms blocks @ 44.1kHz = ~17640 samples)
-        let block_size = 17640.min(s2.len());
-        let hop_size = block_size / 4;
+        let block_size = 17640.min(s2.len()).max(1);
+        let hop_size = (block_size / 4).max(1);
         let mut block_energies = Vec::new();
 
         let mut start = 0;
@@ -100,7 +110,8 @@ impl Operation for AudioLufsOp {
         }
 
         let integrated_lufs = if !block_energies.is_empty() {
-            let avg_ms: f64 = block_energies.iter().map(|(ms, _)| *ms).sum::<f64>() / (block_energies.len() as f64);
+            let avg_ms: f64 = block_energies.iter().map(|(ms, _)| *ms).sum::<f64>()
+                / (block_energies.len() as f64);
             -0.691 + 10.0 * (avg_ms + 1e-12).log10()
         } else {
             -70.0
@@ -130,16 +141,37 @@ impl Operation for AudioSilenceOp {
             OperationCategory::DocumentsAndMedia,
         )
         .with_types(vec![DataType::Bytes], vec![DataType::Json])
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec!["audio".into(), "lufs".into(), "ebur128".into()])
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
         let bytes = input.into_bytes();
         let samples = parse_pcm16_samples(&bytes);
-        let sample_rate = config.get("sample_rate").and_then(|v| v.as_f64()).unwrap_or(44100.0);
-        let threshold_db = config.get("threshold_db").and_then(|v| v.as_f64()).unwrap_or(-40.0);
-        let min_duration_sec = config.get("min_duration_sec").and_then(|v| v.as_f64()).unwrap_or(0.2);
+        let sample_rate = config
+            .get("sample_rate")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(44100.0);
+        if !sample_rate.is_finite() || sample_rate <= 0.0 {
+            return Err(OmniError::Validation(
+                "Audio 'sample_rate' must be a positive finite number".into(),
+            ));
+        }
+        let threshold_db = config
+            .get("threshold_db")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(-40.0);
+        let min_duration_sec = config
+            .get("min_duration_sec")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.2);
 
-        let window_size = (sample_rate * 0.05) as usize; // 50ms windows
+        let window_size = ((sample_rate * 0.05) as usize).max(1); // 50ms windows (min 1 sample)
         let mut silence_intervals = Vec::new();
         let mut in_silence = false;
         let mut silence_start = 0.0;
@@ -149,7 +181,11 @@ impl Operation for AudioSilenceOp {
             let slice = &samples[idx..idx + window_size];
             let sum_sq: f64 = slice.iter().map(|&s| s * s).sum();
             let rms = (sum_sq / window_size as f64).sqrt();
-            let rms_db = if rms > 1e-9 { 20.0 * rms.log10() } else { -120.0 };
+            let rms_db = if rms > 1e-9 {
+                20.0 * rms.log10()
+            } else {
+                -120.0
+            };
 
             let current_time = idx as f64 / sample_rate;
 
@@ -207,21 +243,38 @@ impl Operation for AudioWaveformOp {
             OperationCategory::DocumentsAndMedia,
         )
         .with_types(vec![DataType::Bytes], vec![DataType::Json])
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec!["audio".into(), "lufs".into(), "ebur128".into()])
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
         let bytes = input.into_bytes();
         let samples = parse_pcm16_samples(&bytes);
-        let points = config.get("points").and_then(|v| v.as_u64()).unwrap_or(100) as usize;
+        let points_u64 = config.get("points").and_then(|v| v.as_u64()).unwrap_or(100);
+        if !(1..=100_000).contains(&points_u64) {
+            return Err(OmniError::Validation(
+                "Waveform 'points' must be between 1 and 100,000".into(),
+            ));
+        }
+        let points = points_u64 as usize;
 
         if samples.is_empty() {
-            return Err(OmniError::InvalidInput("No PCM audio samples provided".into()));
+            return Err(OmniError::InvalidInput(
+                "No PCM audio samples provided".into(),
+            ));
         }
 
         // Zero-crossing rate
         let mut zcr_count = 0;
         for i in 1..samples.len() {
-            if (samples[i] >= 0.0 && samples[i - 1] < 0.0) || (samples[i] < 0.0 && samples[i - 1] >= 0.0) {
+            if (samples[i] >= 0.0 && samples[i - 1] < 0.0)
+                || (samples[i] < 0.0 && samples[i - 1] >= 0.0)
+            {
                 zcr_count += 1;
             }
         }
@@ -235,8 +288,12 @@ impl Operation for AudioWaveformOp {
             let mut min_val = 0.0f64;
             let mut max_val = 0.0f64;
             for &s in chunk {
-                if s < min_val { min_val = s; }
-                if s > max_val { max_val = s; }
+                if s < min_val {
+                    min_val = s;
+                }
+                if s > max_val {
+                    max_val = s;
+                }
             }
             peaks.push(json!({
                 "min": (min_val * 1000.0).round() / 1000.0,

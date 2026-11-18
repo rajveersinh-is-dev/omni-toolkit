@@ -136,11 +136,8 @@ impl PipelineExecutor {
         }
 
         // 2. Build dependency graph structures
-        let nodes_by_id: HashMap<&str, &crate::model::PipelineNode> = pipeline
-            .nodes
-            .iter()
-            .map(|n| (n.id.as_str(), n))
-            .collect();
+        let nodes_by_id: HashMap<&str, &crate::model::PipelineNode> =
+            pipeline.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
 
         let mut incoming_edges: HashMap<String, Vec<PipelineEdge>> = HashMap::new();
         let mut dependents: HashMap<String, Vec<String>> = HashMap::new();

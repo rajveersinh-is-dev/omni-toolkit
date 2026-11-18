@@ -38,8 +38,16 @@ pub fn render_hex_dump(data: &[u8], config: &HexConfig) -> String {
         return "<Empty Buffer (0 bytes)>".to_string();
     }
 
-    let bpr = if config.bytes_per_row == 0 { 16 } else { config.bytes_per_row };
-    let group = if config.group_by == 0 { 1 } else { config.group_by };
+    let bpr = if config.bytes_per_row == 0 {
+        16
+    } else {
+        config.bytes_per_row
+    };
+    let group = if config.group_by == 0 {
+        1
+    } else {
+        config.group_by
+    };
     let mut out = String::new();
 
     for (row_idx, chunk) in data.chunks(bpr).enumerate() {
@@ -64,7 +72,7 @@ pub fn render_hex_dump(data: &[u8], config: &HexConfig) -> String {
         }
 
         // Pad hex column if chunk is shorter than bytes_per_row
-        let total_hex_chars = bpr * 2 + (bpr / group).saturating_sub(1);
+        let total_hex_chars = bpr * 2 + bpr.saturating_sub(1) / group;
         let actual_hex_chars = hex_part.len();
         out.push_str(&hex_part);
         if actual_hex_chars < total_hex_chars {
@@ -158,8 +166,12 @@ impl AsciiTable {
             return String::new();
         }
 
-        // Calculate column widths
-        let mut col_widths: Vec<usize> = self.columns.iter().map(|c| c.title.len()).collect();
+        // Calculate column widths using Unicode character counts (not UTF-8 byte lengths)
+        let mut col_widths: Vec<usize> = self
+            .columns
+            .iter()
+            .map(|c| c.title.chars().count())
+            .collect();
 
         for row in &self.rows {
             for (i, cell) in row.iter().enumerate() {
@@ -394,15 +406,30 @@ pub fn render_sparkline(values: &[f64]) -> String {
         return String::new();
     }
 
-    let min = values.iter().copied().fold(f64::INFINITY, f64::min);
-    let max = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let mut min = f64::INFINITY;
+    let mut max = f64::NEG_INFINITY;
+    for &v in values {
+        if v.is_finite() {
+            if v < min {
+                min = v;
+            }
+            if v > max {
+                max = v;
+            }
+        }
+    }
 
     let bars = [' ', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+    if !min.is_finite() || !max.is_finite() {
+        return std::iter::repeat_n(bars[0], values.len()).collect();
+    }
     let range = max - min;
 
     let mut out = String::with_capacity(values.len());
     for &v in values {
-        if range.abs() < 1e-12 {
+        if !v.is_finite() {
+            out.push(bars[0]);
+        } else if range.abs() < 1e-12 {
             out.push(bars[bars.len() / 2]);
         } else {
             let norm = ((v - min) / range).clamp(0.0, 1.0);
@@ -419,14 +446,21 @@ pub fn render_bar_chart(items: &[(&str, f64)], bar_max_width: usize) -> String {
         return String::new();
     }
 
-    let max_val = items.iter().map(|(_, v)| *v).fold(0.0_f64, f64::max);
-    let label_width = items.iter().map(|(l, _)| l.len()).max().unwrap_or(0);
+    let max_val = items
+        .iter()
+        .map(|(_, v)| if v.is_finite() && *v > 0.0 { *v } else { 0.0 })
+        .fold(0.0_f64, f64::max);
+    let label_width = items
+        .iter()
+        .map(|(l, _)| l.chars().count())
+        .max()
+        .unwrap_or(0);
 
     let mut out = String::new();
     for (label, val) in items {
         let _ = write!(out, "{:width$} | ", label, width = label_width);
-        let bar_len = if max_val > 0.0 {
-            ((*val / max_val) * bar_max_width as f64).round() as usize
+        let bar_len = if max_val > 0.0 && val.is_finite() && *val > 0.0 {
+            ((*val / max_val).clamp(0.0, 1.0) * bar_max_width as f64).round() as usize
         } else {
             0
         };
@@ -496,5 +530,40 @@ mod tests {
         let chart = render_bar_chart(&items, 20);
         assert!(chart.contains("write | "));
         assert!(chart.contains("25.00"));
+    }
+
+    #[test]
+    fn test_unicode_table_alignment_and_non_finite_charts() {
+        let cols = vec![TableColumn::new("Min (μs)", Alignment::Right)];
+        let mut table = AsciiTable::new(cols, TableStyle::Unicode);
+        table.add_row(vec!["123.4".into()]);
+        let rendered = table.render();
+        let lines: Vec<&str> = rendered.lines().collect();
+        // Every rendered row in a Unicode box table must have identical character width!
+        let expected_chars = lines[0].chars().count();
+        for line in &lines {
+            assert_eq!(
+                line.chars().count(),
+                expected_chars,
+                "misaligned line: {line}"
+            );
+        }
+
+        // Sparkline & bar chart must never panic on NaN, Infinity, or negative numbers
+        let spark = render_sparkline(&[f64::NAN, 1.0, f64::INFINITY, -5.0]);
+        assert_eq!(spark.chars().count(), 4);
+        let chart = render_bar_chart(&[("neg", -10.0), ("nan", f64::NAN), ("ok", 5.0)], 10);
+        assert!(chart.contains("ok"));
+
+        // Hex dump with non-divisible bytes_per_row / group_by (5 / 2) must align ASCII column across rows!
+        let hcfg = HexConfig {
+            bytes_per_row: 5,
+            group_by: 2,
+            ..Default::default()
+        };
+        let dump = render_hex_dump(b"ABCDEF", &hcfg);
+        let hlines: Vec<&str> = dump.lines().collect();
+        assert_eq!(hlines.len(), 2);
+        assert_eq!(hlines[0].find('|'), hlines[1].find('|'));
     }
 }

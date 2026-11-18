@@ -18,8 +18,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let buffer = vec![0xAB; 64 * 1024]; // 64 KB binary pattern
     let payload = DataPayload::bytes(buffer);
 
-    let sha256_res = sha256_op.execute(payload.clone(), serde_json::json!({}), &ctx).await?;
-    let blake3_res = blake3_op.execute(payload, serde_json::json!({}), &ctx).await?;
+    let sha256_res = sha256_op
+        .execute(payload.clone(), serde_json::json!({}), &ctx)
+        .await?;
+    let blake3_res = blake3_op
+        .execute(payload, serde_json::json!({}), &ctx)
+        .await?;
 
     println!("Dataset Size : 64 KB (repeating 0xAB)");
     println!("SHA-256 Digest: {}", sha256_res.as_str()?);

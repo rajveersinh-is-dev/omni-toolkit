@@ -1,6 +1,6 @@
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniError, OmniResult, Operation,
-    OperationCategory, OperationManifest,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
+    Operation, OperationCategory, OperationManifest,
 };
 use pulldown_cmark::{html, Options, Parser};
 use serde_json::Value;
@@ -17,10 +17,19 @@ impl Operation for DocumentTranscodeOp {
             OperationCategory::DocumentsAndMedia,
         )
         .with_types(vec![DataType::Text], vec![DataType::Text])
+        .with_status(FeatureStatus::Verified)
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
-        let from = config.get("from").and_then(|v| v.as_str()).unwrap_or("markdown");
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
+        let from = config
+            .get("from")
+            .and_then(|v| v.as_str())
+            .unwrap_or("markdown");
         let to = config.get("to").and_then(|v| v.as_str()).unwrap_or("html");
         let text = input.into_text()?;
 
@@ -72,10 +81,14 @@ impl Operation for DocumentTranscodeOp {
                     }
                     Ok(DataPayload::text(man))
                 }
-                _ => Err(OmniError::Validation(format!("Unsupported target document format '{to}'"))),
+                _ => Err(OmniError::Validation(format!(
+                    "Unsupported target document format '{to}'"
+                ))),
             }
         } else {
-            Err(OmniError::Validation(format!("Unsupported source document format '{from}'")))
+            Err(OmniError::Validation(format!(
+                "Unsupported source document format '{from}'"
+            )))
         }
     }
 }

@@ -14,8 +14,14 @@ async fn test_fuzz_encoders_and_decoders() {
     let binary_encoder_ops = [
         "encode.base16",
         "encode.base32",
+        "encode.base32hex",
+        "encode.base45",
         "encode.base58",
+        "encode.base62",
         "encode.base64",
+        "encode.base64url",
+        "encode.base85",
+        "encode.base91",
     ];
 
     // 1. Fuzz binary encoders on arbitrary pseudo-random byte buffers
@@ -27,8 +33,15 @@ async fn test_fuzz_encoders_and_decoders() {
             let op = registry.get(op_id).expect("Operation must exist");
 
             // Encode
-            let encode_res = op.execute(payload.clone(), serde_json::json!({}), &ctx).await;
-            assert!(encode_res.is_ok(), "Encoding {} bytes failed for {}", size, op_id);
+            let encode_res = op
+                .execute(payload.clone(), serde_json::json!({}), &ctx)
+                .await;
+            assert!(
+                encode_res.is_ok(),
+                "Encoding {} bytes failed for {}",
+                size,
+                op_id
+            );
             let encoded = encode_res.unwrap();
 
             // Decode back
@@ -38,12 +51,21 @@ async fn test_fuzz_encoders_and_decoders() {
             assert!(decode_res.is_ok(), "Decoding failed for {}", op_id);
             let decoded = decode_res.unwrap();
 
-            assert_eq!(decoded.into_bytes(), raw, "Roundtrip mismatch for {}", op_id);
+            assert_eq!(
+                decoded.into_bytes(),
+                raw,
+                "Roundtrip mismatch for {}",
+                op_id
+            );
         }
     }
 
     // 2. Fuzz text encoders on generated UTF-8 strings
-    let text_encoder_ops = ["encode.url", "encode.html_entities", "encode.unicode_escapes"];
+    let text_encoder_ops = [
+        "encode.url",
+        "encode.html_entities",
+        "encode.unicode_escapes",
+    ];
     for size in [0, 1, 10, 50, 200] {
         let text = gen.printable_ascii(size);
         let payload = DataPayload::text(&text);
@@ -52,8 +74,15 @@ async fn test_fuzz_encoders_and_decoders() {
             let op = registry.get(op_id).expect("Operation must exist");
 
             // Encode
-            let encode_res = op.execute(payload.clone(), serde_json::json!({}), &ctx).await;
-            assert!(encode_res.is_ok(), "Encoding {} chars failed for {}", size, op_id);
+            let encode_res = op
+                .execute(payload.clone(), serde_json::json!({}), &ctx)
+                .await;
+            assert!(
+                encode_res.is_ok(),
+                "Encoding {} chars failed for {}",
+                size,
+                op_id
+            );
             let encoded = encode_res.unwrap();
 
             // Decode back
@@ -63,7 +92,12 @@ async fn test_fuzz_encoders_and_decoders() {
             assert!(decode_res.is_ok(), "Decoding failed for {}", op_id);
             let decoded = decode_res.unwrap();
 
-            assert_eq!(decoded.as_str().unwrap(), &text, "Text roundtrip mismatch for {}", op_id);
+            assert_eq!(
+                decoded.as_str().unwrap(),
+                &text,
+                "Text roundtrip mismatch for {}",
+                op_id
+            );
         }
     }
 
@@ -76,7 +110,11 @@ async fn test_fuzz_encoders_and_decoders() {
             let op = registry.get(op_id).unwrap();
             // Should gracefully return an Err or decoded bytes, but NEVER panic!
             let _ = op
-                .execute(garbage_payload.clone(), serde_json::json!({ "decode": true }), &ctx)
+                .execute(
+                    garbage_payload.clone(),
+                    serde_json::json!({ "decode": true }),
+                    &ctx,
+                )
                 .await;
         }
     }

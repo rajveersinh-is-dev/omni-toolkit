@@ -1,7 +1,7 @@
 use lopdf::{Document, Object};
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniError, OmniResult, Operation,
-    OperationCategory, OperationManifest,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
+    Operation, OperationCategory, OperationManifest,
 };
 use serde_json::Value;
 
@@ -17,20 +17,32 @@ impl Operation for PdfScrubberOp {
             OperationCategory::DocumentsAndMedia,
         )
         .with_types(vec![DataType::Bytes], vec![DataType::Bytes])
+        .with_status(FeatureStatus::Verified)
     }
 
-    async fn execute(&self, input: DataPayload, _config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
+    async fn execute(
+        &self,
+        input: DataPayload,
+        _config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
         let bytes = input.into_bytes();
         let mut doc = Document::load_mem(&bytes)
             .map_err(|e| OmniError::InvalidInput(format!("Failed to parse PDF: {e}")))?;
 
-        // 1. Remove trailer /Info reference or dict
+        // 1. Capture and remove trailer /Info reference or dict (and its indirect object)
+        let mut to_remove = Vec::new();
+        if let Ok(Object::Reference(info_id)) = doc.trailer.get(b"Info") {
+            to_remove.push(*info_id);
+        }
         doc.trailer.remove(b"Info");
 
         // 2. Scan and sanitize all objects that are /Info or /Metadata
-        let mut to_remove = Vec::new();
         for ((id, gen), obj) in &mut doc.objects {
             if let Object::Dictionary(dict) = obj {
+                if let Ok(Object::Reference(meta_id)) = dict.get(b"Metadata") {
+                    to_remove.push(*meta_id);
+                }
                 dict.remove(b"Author");
                 dict.remove(b"Creator");
                 dict.remove(b"Producer");
@@ -47,6 +59,9 @@ impl Operation for PdfScrubberOp {
                     }
                 }
             } else if let Object::Stream(stream) = obj {
+                if let Ok(Object::Reference(meta_id)) = stream.dict.get(b"Metadata") {
+                    to_remove.push(*meta_id);
+                }
                 stream.dict.remove(b"Metadata");
                 if let Ok(t) = stream.dict.get(b"Type") {
                     if t == &Object::Name(b"Metadata".to_vec()) {
@@ -61,8 +76,10 @@ impl Operation for PdfScrubberOp {
         }
 
         let mut out = Vec::new();
-        doc.save_to(&mut out)
-            .map_err(|e| OmniError::Execution { operation: "pdf_scrub".into(), message: e.to_string() })?;
+        doc.save_to(&mut out).map_err(|e| OmniError::Execution {
+            operation: "pdf_scrub".into(),
+            message: e.to_string(),
+        })?;
 
         Ok(DataPayload::bytes(out))
     }

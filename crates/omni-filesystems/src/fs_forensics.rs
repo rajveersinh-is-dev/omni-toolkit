@@ -1,10 +1,26 @@
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniError, OmniResult, Operation,
-    OperationCategory, OperationManifest,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
+    Operation, OperationCategory, OperationManifest,
 };
 use serde_json::{json, Value};
 
 pub struct FilesystemForensicsOp;
+
+fn read_u32_le(buf: &[u8], off: usize) -> OmniResult<u32> {
+    let slice = buf
+        .get(off..off + 4)
+        .ok_or_else(|| OmniError::InvalidInput("Truncated filesystem header (u32)".into()))?;
+    Ok(u32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]))
+}
+
+fn read_u64_le(buf: &[u8], off: usize) -> OmniResult<u64> {
+    let slice = buf
+        .get(off..off + 8)
+        .ok_or_else(|| OmniError::InvalidInput("Truncated filesystem header (u64)".into()))?;
+    Ok(u64::from_le_bytes([
+        slice[0], slice[1], slice[2], slice[3], slice[4], slice[5], slice[6], slice[7],
+    ]))
+}
 
 #[async_trait]
 impl Operation for FilesystemForensicsOp {
@@ -16,21 +32,36 @@ impl Operation for FilesystemForensicsOp {
             OperationCategory::StorageAndFormats,
         )
         .with_types(vec![DataType::Bytes], vec![DataType::Json])
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec!["filesystem".into(), "mbr".into(), "gpt".into(), "ext4".into()])
     }
 
-    async fn execute(&self, input: DataPayload, _config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
+    async fn execute(
+        &self,
+        input: DataPayload,
+        _config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
         let bytes = input.into_bytes();
         if bytes.len() < 512 {
-            return Err(OmniError::InvalidInput("Image too small for partition sector (< 512 bytes)".into()));
+            return Err(OmniError::InvalidInput(
+                "Image too small for partition sector (< 512 bytes)".into(),
+            ));
         }
 
         // 1. Check ext2/3/4 superblock at offset 1024
         if bytes.len() >= 1024 + 100 && bytes[1024 + 56] == 0x53 && bytes[1024 + 57] == 0xEF {
             let sb = &bytes[1024..];
-            let inodes_count = u32::from_le_bytes([sb[0], sb[1], sb[2], sb[3]]);
-            let blocks_count = u32::from_le_bytes([sb[4], sb[5], sb[6], sb[7]]);
-            let log_block_size = u32::from_le_bytes([sb[24], sb[25], sb[26], sb[27]]);
+            let inodes_count = read_u32_le(sb, 0)?;
+            let blocks_count = read_u32_le(sb, 4)?;
+            let log_block_size = read_u32_le(sb, 24)?;
+            if log_block_size > 16 {
+                return Err(OmniError::InvalidInput(format!(
+                    "Invalid ext superblock log_block_size ({log_block_size} > 16)"
+                )));
+            }
             let block_size = 1024u64 << log_block_size;
+            let total_bytes = (blocks_count as u64).saturating_mul(block_size);
 
             return Ok(DataPayload::json(json!({
                 "detected_filesystem": "ext2/ext3/ext4",
@@ -38,17 +69,17 @@ impl Operation for FilesystemForensicsOp {
                 "total_inodes": inodes_count,
                 "total_blocks": blocks_count,
                 "block_size_bytes": block_size,
-                "filesystem_size_mb": (blocks_count as u64 * block_size) / (1024 * 1024),
+                "filesystem_size_mb": total_bytes / (1024 * 1024),
             })));
         }
 
         // 2. Check GPT Header at offset 512
         if bytes.len() >= 1024 && &bytes[512..520] == b"EFI PART" {
             let hdr = &bytes[512..];
-            let current_lba = u64::from_le_bytes(hdr[24..32].try_into().unwrap());
-            let backup_lba = u64::from_le_bytes(hdr[32..40].try_into().unwrap());
-            let num_part_entries = u32::from_le_bytes(hdr[80..84].try_into().unwrap());
-            let part_entry_size = u32::from_le_bytes(hdr[84..88].try_into().unwrap());
+            let current_lba = read_u64_le(hdr, 24)?;
+            let backup_lba = read_u64_le(hdr, 32)?;
+            let num_part_entries = read_u32_le(hdr, 80)?;
+            let part_entry_size = read_u32_le(hdr, 84)?;
 
             return Ok(DataPayload::json(json!({
                 "partition_table": "GPT (GUID Partition Table)",

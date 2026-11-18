@@ -9,6 +9,7 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 omni-core = { workspace = true }
 omni-registry = { workspace = true }
+omni-security = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 async-trait = { workspace = true }

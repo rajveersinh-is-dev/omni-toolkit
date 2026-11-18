@@ -1,7 +1,7 @@
 use lopdf::Document;
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniError, OmniResult, Operation,
-    OperationCategory, OperationManifest,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
+    Operation, OperationCategory, OperationManifest,
 };
 use serde_json::Value;
 
@@ -17,10 +17,19 @@ impl Operation for PdfMultiToolOp {
             OperationCategory::DocumentsAndMedia,
         )
         .with_types(vec![DataType::Bytes], vec![DataType::Bytes, DataType::Json])
+        .with_status(FeatureStatus::Verified)
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
-        let action = config.get("action").and_then(|v| v.as_str()).unwrap_or("info");
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
+        let action = config
+            .get("action")
+            .and_then(|v| v.as_str())
+            .unwrap_or("info");
         let bytes = input.into_bytes();
 
         let mut doc = Document::load_mem(&bytes)
@@ -29,17 +38,30 @@ impl Operation for PdfMultiToolOp {
         match action {
             "rotate" => {
                 let degrees = config.get("degrees").and_then(|v| v.as_i64()).unwrap_or(90);
+                if degrees % 90 != 0 {
+                    return Err(OmniError::Validation(format!(
+                        "PDF page rotation must be a multiple of 90 degrees (got {degrees})"
+                    )));
+                }
+                let normalized_deg = degrees.rem_euclid(360);
                 let pages = doc.get_pages();
                 for (_page_num, page_id) in pages {
-                    let page = doc.get_object_mut(page_id)
-                        .map_err(|e| OmniError::Execution { operation: "pdf_rotate".into(), message: e.to_string() })?;
+                    let page = doc
+                        .get_object_mut(page_id)
+                        .map_err(|e| OmniError::Execution {
+                            operation: "pdf_rotate".into(),
+                            message: e.to_string(),
+                        })?;
                     if let Ok(dict) = page.as_dict_mut() {
-                        dict.set("Rotate", degrees);
+                        dict.set("Rotate", normalized_deg);
                     }
                 }
                 let mut out_bytes = Vec::new();
                 doc.save_to(&mut out_bytes)
-                    .map_err(|e| OmniError::Execution { operation: "pdf_save".into(), message: e.to_string() })?;
+                    .map_err(|e| OmniError::Execution {
+                        operation: "pdf_save".into(),
+                        message: e.to_string(),
+                    })?;
                 Ok(DataPayload::bytes(out_bytes))
             }
             _ => {

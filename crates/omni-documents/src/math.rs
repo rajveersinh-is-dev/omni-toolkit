@@ -64,6 +64,8 @@ fn latex_symbol_to_unicode(cmd: &str) -> Option<&'static str> {
     }
 }
 
+const MAX_MATH_DEPTH: usize = 64;
+
 struct MathParser<'a> {
     chars: Vec<char>,
     pos: usize,
@@ -89,7 +91,12 @@ impl<'a> MathParser<'a> {
         }
     }
 
-    fn parse_seq(&mut self, stop_at_brace: bool) -> Vec<MathNode> {
+    fn parse_seq(&mut self, stop_at_brace: bool, depth: usize) -> OmniResult<Vec<MathNode>> {
+        if depth > MAX_MATH_DEPTH {
+            return Err(OmniError::Validation(format!(
+                "Math expression nesting depth exceeds maximum limit ({MAX_MATH_DEPTH})"
+            )));
+        }
         let mut nodes = Vec::new();
         while let Some(c) = self.peek() {
             if stop_at_brace && c == '}' {
@@ -105,7 +112,7 @@ impl<'a> MathParser<'a> {
                 let base = nodes
                     .pop()
                     .unwrap_or_else(|| MathNode::Symbol(String::new()));
-                let arg = self.parse_atom();
+                let arg = self.parse_atom(depth + 1)?;
                 if c == '^' {
                     nodes.push(MathNode::Sup(Box::new(base), Box::new(arg)));
                 } else {
@@ -113,21 +120,26 @@ impl<'a> MathParser<'a> {
                 }
                 continue;
             }
-            nodes.push(self.parse_atom());
+            nodes.push(self.parse_atom(depth)?);
         }
-        nodes
+        Ok(nodes)
     }
 
-    fn parse_atom(&mut self) -> MathNode {
+    fn parse_atom(&mut self, depth: usize) -> OmniResult<MathNode> {
+        if depth > MAX_MATH_DEPTH {
+            return Err(OmniError::Validation(format!(
+                "Math expression nesting depth exceeds maximum limit ({MAX_MATH_DEPTH})"
+            )));
+        }
         self.skip_ws();
         let Some(c) = self.peek() else {
-            return MathNode::Symbol(String::new());
+            return Ok(MathNode::Symbol(String::new()));
         };
 
         if c == '{' {
             self.pos += 1;
-            let seq = self.parse_seq(true);
-            return MathNode::Group(seq);
+            let seq = self.parse_seq(true, depth + 1)?;
+            return Ok(MathNode::Group(seq));
         }
 
         if c == '\\' {
@@ -141,21 +153,29 @@ impl<'a> MathParser<'a> {
                     break;
                 }
             }
+            // Handle single-character escaped symbols (e.g. \{, \}, \%, \\)
+            if cmd.is_empty() {
+                if let Some(escaped) = self.peek() {
+                    self.pos += 1;
+                    return Ok(MathNode::Operator(escaped.to_string()));
+                }
+                return Ok(MathNode::Symbol(String::new()));
+            }
             return match cmd.as_str() {
                 "frac" => {
-                    let num = self.parse_atom();
-                    let den = self.parse_atom();
-                    MathNode::Frac(Box::new(num), Box::new(den))
+                    let num = self.parse_atom(depth + 1)?;
+                    let den = self.parse_atom(depth + 1)?;
+                    Ok(MathNode::Frac(Box::new(num), Box::new(den)))
                 }
                 "sqrt" => {
-                    let inner = self.parse_atom();
-                    MathNode::Sqrt(Box::new(inner))
+                    let inner = self.parse_atom(depth + 1)?;
+                    Ok(MathNode::Sqrt(Box::new(inner)))
                 }
                 other => {
                     if let Some(sym) = latex_symbol_to_unicode(other) {
-                        MathNode::Operator(sym.to_string())
+                        Ok(MathNode::Operator(sym.to_string()))
                     } else {
-                        MathNode::Symbol(other.to_string())
+                        Ok(MathNode::Symbol(other.to_string()))
                     }
                 }
             };
@@ -171,14 +191,14 @@ impl<'a> MathParser<'a> {
                     break;
                 }
             }
-            return MathNode::Number(num);
+            return Ok(MathNode::Number(num));
         }
 
         self.pos += 1;
         if "+-*/=<>()[]|,".contains(c) {
-            MathNode::Operator(c.to_string())
+            Ok(MathNode::Operator(c.to_string()))
         } else {
-            MathNode::Symbol(c.to_string())
+            Ok(MathNode::Symbol(c.to_string()))
         }
     }
 }
@@ -203,7 +223,10 @@ fn measure_width(node: &MathNode, font_size: f64) -> f64 {
     match node {
         MathNode::Symbol(s) | MathNode::Number(s) => (s.chars().count() as f64) * font_size * 0.62,
         MathNode::Operator(o) => (o.chars().count() as f64) * font_size * 0.78,
-        MathNode::Group(items) => items.iter().map(|n| measure_width(n, font_size) + 2.0).sum(),
+        MathNode::Group(items) => items
+            .iter()
+            .map(|n| measure_width(n, font_size) + 2.0)
+            .sum(),
         MathNode::Frac(n, d) => {
             measure_width(n, font_size * 0.85).max(measure_width(d, font_size * 0.85)) + 14.0
         }
@@ -286,12 +309,24 @@ fn render_svg_node(node: &MathNode, x: f64, y: f64, font_size: f64, out: &mut St
         }
         MathNode::Sup(base, sup) => {
             let bw = render_svg_node(base, x, y, font_size, out);
-            let sw = render_svg_node(sup, x + bw + 1.0, y - font_size * 0.45, font_size * 0.65, out);
+            let sw = render_svg_node(
+                sup,
+                x + bw + 1.0,
+                y - font_size * 0.45,
+                font_size * 0.65,
+                out,
+            );
             bw + sw + 2.0
         }
         MathNode::Sub(base, sub) => {
             let bw = render_svg_node(base, x, y, font_size, out);
-            let sw = render_svg_node(sub, x + bw + 1.0, y + font_size * 0.25, font_size * 0.65, out);
+            let sw = render_svg_node(
+                sub,
+                x + bw + 1.0,
+                y + font_size * 0.25,
+                font_size * 0.65,
+                out,
+            );
             bw + sw + 2.0
         }
     }
@@ -329,9 +364,12 @@ impl Operation for MathTypesetOp {
             ));
         }
 
-        let format = config.get("format").and_then(|v| v.as_str()).unwrap_or("svg");
+        let format = config
+            .get("format")
+            .and_then(|v| v.as_str())
+            .unwrap_or("svg");
         let mut parser = MathParser::new(&math_text);
-        let ast = MathNode::Group(parser.parse_seq(false));
+        let ast = MathNode::Group(parser.parse_seq(false, 0)?);
 
         if format == "mathml" {
             let inner = render_mathml(&ast);

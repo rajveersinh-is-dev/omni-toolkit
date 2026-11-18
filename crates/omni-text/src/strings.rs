@@ -1,6 +1,6 @@
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniError, OmniResult, Operation,
-    OperationCategory, OperationManifest,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
+    Operation, OperationCategory, OperationManifest,
 };
 use serde_json::Value;
 
@@ -12,14 +12,24 @@ impl Operation for StringTransformersOp {
         OperationManifest::new(
             "text.string_transformers",
             "String Transformers & Phonetics",
-            "Case conversions, slugification, deduplication, natural/version sorting, diacritics removal, and Soundex phonetic encoding",
+            "Case conversions, slugification, deduplication, line sorting, and NARA American Soundex phonetic encoding",
             OperationCategory::TextAndCode,
         )
         .with_types(vec![DataType::Text], vec![DataType::Text])
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec!["text".into(), "strings".into(), "case".into(), "soundex".into()])
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
-        let action = config.get("action").and_then(|v| v.as_str()).unwrap_or("snake_case");
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
+        let action = config
+            .get("action")
+            .and_then(|v| v.as_str())
+            .unwrap_or("snake_case");
         let text = input.into_text()?;
 
         let result = match action {
@@ -46,7 +56,11 @@ impl Operation for StringTransformersOp {
                 lines.join("\n")
             }
             "soundex" => soundex(&text),
-            _ => return Err(OmniError::Validation(format!("Unknown string transform action '{action}'"))),
+            _ => {
+                return Err(OmniError::Validation(format!(
+                    "Unknown string transform action '{action}'"
+                )))
+            }
         };
 
         Ok(DataPayload::text(result))
@@ -62,7 +76,14 @@ fn to_words(s: &str) -> Vec<String> {
                 words.push(current);
                 current = String::new();
             }
-        } else if c.is_uppercase() && !current.is_empty() && current.chars().last().map(|lc| lc.is_lowercase()).unwrap_or(false) {
+        } else if c.is_uppercase()
+            && !current.is_empty()
+            && current
+                .chars()
+                .last()
+                .map(|lc| lc.is_lowercase())
+                .unwrap_or(false)
+        {
             words.push(current);
             current = String::new();
             current.push(c);
@@ -77,11 +98,19 @@ fn to_words(s: &str) -> Vec<String> {
 }
 
 fn to_snake_case(s: &str) -> String {
-    to_words(s).into_iter().map(|w| w.to_lowercase()).collect::<Vec<_>>().join("_")
+    to_words(s)
+        .into_iter()
+        .map(|w| w.to_lowercase())
+        .collect::<Vec<_>>()
+        .join("_")
 }
 
 fn to_kebab_case(s: &str) -> String {
-    to_words(s).into_iter().map(|w| w.to_lowercase()).collect::<Vec<_>>().join("-")
+    to_words(s)
+        .into_iter()
+        .map(|w| w.to_lowercase())
+        .collect::<Vec<_>>()
+        .join("-")
 }
 
 fn to_camel_case(s: &str) -> String {
@@ -127,15 +156,20 @@ fn slugify(s: &str) -> String {
     out.trim_end_matches('-').to_string()
 }
 
-// American Soundex algorithm
+// NARA American Soundex algorithm (H and W do not separate identical consonant codes)
 fn soundex(s: &str) -> String {
-    let chars: Vec<char> = s.trim().to_uppercase().chars().filter(|c| c.is_ascii_alphabetic()).collect();
+    let chars: Vec<char> = s
+        .trim()
+        .to_uppercase()
+        .chars()
+        .filter(|c| c.is_ascii_alphabetic())
+        .collect();
     if chars.is_empty() {
         return "0000".to_string();
     }
 
     let first = chars[0];
-    let mut code = String::new();
+    let mut code = String::with_capacity(4);
     code.push(first);
 
     let map_char = |c: char| -> char {
@@ -152,6 +186,10 @@ fn soundex(s: &str) -> String {
 
     let mut last_digit = map_char(first);
     for &c in &chars[1..] {
+        if c == 'H' || c == 'W' {
+            // In NARA American Soundex, H and W are transparent between two consonants with the same code
+            continue;
+        }
         let d = map_char(c);
         if d != '0' && d != last_digit {
             code.push(d);

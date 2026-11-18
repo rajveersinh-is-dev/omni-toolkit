@@ -202,10 +202,9 @@ mod tests {
         pipeline.add_edge("node1", "node2");
 
         let ctx = ExecutionContext::new("job1");
-        let results =
-            PipelineExecutor::execute(&pipeline, DataPayload::text("omni"), &reg, &ctx)
-                .await
-                .unwrap();
+        let results = PipelineExecutor::execute(&pipeline, DataPayload::text("omni"), &reg, &ctx)
+            .await
+            .unwrap();
 
         assert_eq!(results.get("node1").unwrap().as_str().unwrap(), "OMNI");
         assert_eq!(results.get("node2").unwrap().as_str().unwrap(), "INMO");
@@ -247,7 +246,13 @@ mod tests {
             report.outputs.get("join_named").unwrap().as_str().unwrap(),
             "OMNI::inmo"
         );
-        let merged = report.outputs.get("join_merge").unwrap().clone().into_json().unwrap();
+        let merged = report
+            .outputs
+            .get("join_merge")
+            .unwrap()
+            .clone()
+            .into_json()
+            .unwrap();
         assert_eq!(merged["branch_a"], "OMNI");
         assert_eq!(merged["branch_b"], "inmo");
         assert_eq!(report.nodes.len(), 4);
@@ -268,8 +273,8 @@ mod tests {
         .unwrap();
         let reg = RwLock::new(reg);
 
-        let mut pipeline = PipelineDefinition::new("concurrent_test", "Parallel Branches")
-            .with_max_concurrency(2);
+        let mut pipeline =
+            PipelineDefinition::new("concurrent_test", "Parallel Branches").with_max_concurrency(2);
         pipeline.add_node("p1", "test.barrier", serde_json::json!({}));
         pipeline.add_node("p2", "test.barrier", serde_json::json!({}));
 
@@ -338,7 +343,8 @@ mod tests {
         pipeline.add_edge("n1", "n2");
 
         let ctx = ExecutionContext::new("fail_job");
-        let res = PipelineExecutor::execute(&pipeline, DataPayload::text("hello"), &reg, &ctx).await;
+        let res =
+            PipelineExecutor::execute(&pipeline, DataPayload::text("hello"), &reg, &ctx).await;
         assert!(res.is_err());
         assert!(ctx.is_cancelled());
     }

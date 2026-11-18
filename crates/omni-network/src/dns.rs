@@ -81,6 +81,11 @@ fn decode_dns_name(buf: &[u8], start_offset: usize) -> OmniResult<(String, usize
             }
             offset = ptr;
             hops += 1;
+        } else if (len & 0xC0) != 0 {
+            return Err(OmniError::InvalidInput(format!(
+                "Invalid DNS label length octet 0x{:02X} (reserved bits set)",
+                len
+            )));
         } else {
             let label_len = len as usize;
             let start = offset + 1;
@@ -121,7 +126,9 @@ fn parse_dns_packet(buf: &[u8]) -> OmniResult<Value> {
         let (qname, next) = decode_dns_name(buf, offset)?;
         offset = next;
         if offset + 4 > buf.len() {
-            return Err(OmniError::InvalidInput("Truncated DNS question entry".into()));
+            return Err(OmniError::InvalidInput(
+                "Truncated DNS question entry".into(),
+            ));
         }
         let qtype = u16::from_be_bytes([buf[offset], buf[offset + 1]]);
         let qclass = u16::from_be_bytes([buf[offset + 2], buf[offset + 3]]);
@@ -150,11 +157,14 @@ fn parse_dns_packet(buf: &[u8]) -> OmniResult<Value> {
         let rdlength = u16::from_be_bytes([buf[offset + 8], buf[offset + 9]]) as usize;
         offset += 10;
 
-        if offset + rdlength > buf.len() {
+        let Some(rdata_end) = offset.checked_add(rdlength) else {
+            break;
+        };
+        if rdata_end > buf.len() {
             break;
         }
         let rdata_start = offset;
-        let rdata = &buf[rdata_start..rdata_start + rdlength];
+        let rdata = &buf[rdata_start..rdata_end];
 
         let (type_name, value_str) = match atype {
             1 if rdlength == 4 => (
@@ -323,15 +333,22 @@ impl Operation for DnsPowerSuiteOp {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
-        let host_only = server.rsplit_once(':').map(|(h, _)| h).unwrap_or(server);
-        validate_network_target(host_only, allow_external)?;
+        let host_raw = if server.starts_with('[') {
+            server
+                .split_once(']')
+                .map(|(h, _)| h.trim_start_matches('['))
+                .unwrap_or(server)
+        } else {
+            server.rsplit_once(':').map(|(h, _)| h).unwrap_or(server)
+        };
+        validate_network_target(host_raw, allow_external)?;
 
-        let socket = UdpSocket::bind("0.0.0.0:0").await.map_err(|e| {
-            OmniError::Execution {
+        let socket = UdpSocket::bind("0.0.0.0:0")
+            .await
+            .map_err(|e| OmniError::Execution {
                 operation: "dns_bind".into(),
                 message: e.to_string(),
-            }
-        })?;
+            })?;
 
         socket
             .send_to(&query_wire, server)
@@ -348,7 +365,12 @@ impl Operation for DnsPowerSuiteOp {
             .unwrap_or(1500)
             .clamp(50, 10_000);
 
-        match timeout(Duration::from_millis(timeout_ms), socket.recv_from(&mut resp_buf)).await {
+        match timeout(
+            Duration::from_millis(timeout_ms),
+            socket.recv_from(&mut resp_buf),
+        )
+        .await
+        {
             Ok(Ok((n, _src))) => {
                 let parsed = parse_dns_packet(&resp_buf[..n])?;
                 Ok(DataPayload::json(parsed))

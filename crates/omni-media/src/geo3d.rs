@@ -1,5 +1,5 @@
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniResult, Operation,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniResult, Operation,
     OperationCategory, OperationManifest,
 };
 use serde_json::{json, Value};
@@ -16,9 +16,15 @@ impl Operation for Geo3dInspectOp {
             OperationCategory::DocumentsAndMedia,
         )
         .with_types(vec![DataType::Text, DataType::Bytes], vec![DataType::Json])
+        .with_status(FeatureStatus::Verified)
     }
 
-    async fn execute(&self, input: DataPayload, _config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
+    async fn execute(
+        &self,
+        input: DataPayload,
+        _config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
         let text = input.into_text().unwrap_or_default();
 
         // Wavefront OBJ parsing
@@ -30,19 +36,30 @@ impl Operation for Geo3dInspectOp {
             if trimmed.starts_with("v ") {
                 let parts: Vec<&str> = trimmed.split_whitespace().collect();
                 if parts.len() >= 4 {
-                    if let (Ok(x), Ok(y), Ok(z)) = (parts[1].parse::<f64>(), parts[2].parse::<f64>(), parts[3].parse::<f64>()) {
-                        vertices.push([x, y, z]);
+                    if let (Ok(x), Ok(y), Ok(z)) = (
+                        parts[1].parse::<f64>(),
+                        parts[2].parse::<f64>(),
+                        parts[3].parse::<f64>(),
+                    ) {
+                        if x.is_finite() && y.is_finite() && z.is_finite() {
+                            vertices.push([x, y, z]);
+                        }
                     }
                 }
             } else if trimmed.starts_with("f ") {
                 let parts: Vec<&str> = trimmed.split_whitespace().collect();
                 let mut face = Vec::new();
                 for &p in &parts[1..] {
-                    // format might be v or v/vt or v/vt/vn
+                    // format might be v or v/vt or v/vt/vn; negative indices are relative to current vertex count
                     let v_idx_str = p.split('/').next().unwrap_or("");
-                    if let Ok(idx) = v_idx_str.parse::<usize>() {
+                    if let Ok(idx) = v_idx_str.parse::<isize>() {
                         if idx > 0 {
-                            face.push(idx - 1);
+                            face.push((idx - 1) as usize);
+                        } else if idx < 0 {
+                            let rel = vertices.len() as isize + idx;
+                            if rel >= 0 {
+                                face.push(rel as usize);
+                            }
                         }
                     }
                 }
@@ -68,33 +85,48 @@ impl Operation for Geo3dInspectOp {
         let mut max_z = f64::NEG_INFINITY;
 
         for v in &vertices {
-            if v[0] < min_x { min_x = v[0]; }
-            if v[0] > max_x { max_x = v[0]; }
-            if v[1] < min_y { min_y = v[1]; }
-            if v[1] > max_y { max_y = v[1]; }
-            if v[2] < min_z { min_z = v[2]; }
-            if v[2] > max_z { max_z = v[2]; }
+            if v[0] < min_x {
+                min_x = v[0];
+            }
+            if v[0] > max_x {
+                max_x = v[0];
+            }
+            if v[1] < min_y {
+                min_y = v[1];
+            }
+            if v[1] > max_y {
+                max_y = v[1];
+            }
+            if v[2] < min_z {
+                min_z = v[2];
+            }
+            if v[2] > max_z {
+                max_z = v[2];
+            }
         }
 
-        // Surface area computation (cross product of triangles)
+        // Surface area computation (fan-triangulation supports triangles, quads, and convex n-gons)
         let mut total_surface_area = 0.0f64;
         for face in &faces {
-            if face.len() == 3 && face[0] < vertices.len() && face[1] < vertices.len() && face[2] < vertices.len() {
+            if face.len() >= 3 && face.iter().all(|&idx| idx < vertices.len()) {
                 let p0 = vertices[face[0]];
-                let p1 = vertices[face[1]];
-                let p2 = vertices[face[2]];
+                for k in 1..(face.len() - 1) {
+                    let p1 = vertices[face[k]];
+                    let p2 = vertices[face[k + 1]];
 
-                let ab = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
-                let ac = [p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]];
+                    let ab = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
+                    let ac = [p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]];
 
-                let cross = [
-                    ab[1] * ac[2] - ab[2] * ac[1],
-                    ab[2] * ac[0] - ab[0] * ac[2],
-                    ab[0] * ac[1] - ab[1] * ac[0],
-                ];
+                    let cross = [
+                        ab[1] * ac[2] - ab[2] * ac[1],
+                        ab[2] * ac[0] - ab[0] * ac[2],
+                        ab[0] * ac[1] - ab[1] * ac[0],
+                    ];
 
-                let area = 0.5 * (cross[0] * cross[0] + cross[1] * cross[1] + cross[2] * cross[2]).sqrt();
-                total_surface_area += area;
+                    let area = 0.5
+                        * (cross[0] * cross[0] + cross[1] * cross[1] + cross[2] * cross[2]).sqrt();
+                    total_surface_area += area;
+                }
             }
         }
 
@@ -125,23 +157,37 @@ impl Operation for Geo3dShaderOp {
             OperationCategory::DocumentsAndMedia,
         )
         .with_types(vec![DataType::Text], vec![DataType::Json])
+        .with_status(FeatureStatus::Verified)
     }
 
-    async fn execute(&self, input: DataPayload, _config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
+    async fn execute(
+        &self,
+        input: DataPayload,
+        _config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
         let code = input.into_text()?;
-        
-        let is_wgsl = code.contains("@vertex") || code.contains("@fragment") || code.contains("fn main");
+
+        let is_wgsl =
+            code.contains("@vertex") || code.contains("@fragment") || code.contains("fn main");
         let has_glsl_version = code.contains("#version");
         let has_main = code.contains("void main") || code.contains("fn main");
 
-        // Basic brace balance check
+        // Strict brace balance check (never dips below 0, e.g. "} {" is unbalanced)
         let mut brace_count = 0i32;
+        let mut dipped_negative = false;
         for c in code.chars() {
-            if c == '{' { brace_count += 1; }
-            else if c == '}' { brace_count -= 1; }
+            if c == '{' {
+                brace_count += 1;
+            } else if c == '}' {
+                brace_count -= 1;
+                if brace_count < 0 {
+                    dipped_negative = true;
+                }
+            }
         }
 
-        let is_balanced = brace_count == 0;
+        let is_balanced = brace_count == 0 && !dipped_negative;
 
         let mut uniforms = Vec::new();
         let mut attributes = Vec::new();

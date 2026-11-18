@@ -36,11 +36,7 @@ async fn test_empty_input_regression() {
     // 3. Empty text diff
     let diff = registry.get("text.diff").unwrap();
     let diff_out = diff
-        .execute(
-            empty_payload,
-            serde_json::json!({ "original": "" }),
-            &ctx,
-        )
+        .execute(empty_payload, serde_json::json!({ "original": "" }), &ctx)
         .await
         .unwrap();
     assert_eq!(diff_out.as_str().unwrap(), "");

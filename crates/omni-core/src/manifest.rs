@@ -42,11 +42,7 @@ impl OperationCategory {
             | "storage & filesystems"
             | "storage"
             | "filesystems" => Some(Self::StorageAndFormats),
-            "cloudanddevops"
-            | "cloud_and_devops"
-            | "cloud & devops"
-            | "cloud"
-            | "devops"
+            "cloudanddevops" | "cloud_and_devops" | "cloud & devops" | "cloud" | "devops"
             | "infrastructure" => Some(Self::CloudAndDevOps),
             "aiandtensors" | "ai_and_tensors" | "ai & tensors" | "ai" | "ml" => {
                 Some(Self::AiAndTensors)

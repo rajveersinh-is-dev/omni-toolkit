@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniError, OmniResult, Operation,
-    OperationCategory, OperationManifest,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
+    Operation, OperationCategory, OperationManifest,
 };
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -34,7 +34,7 @@ fn generate_ulid() -> String {
 }
 
 fn decode_snowflake(id: u64, epoch_ms: u64) -> Value {
-    let timestamp_ms = (id >> 22) + epoch_ms;
+    let timestamp_ms = (id >> 22).saturating_add(epoch_ms);
     let internal_worker_id = (id & 0x3E0000) >> 17;
     let internal_process_id = (id & 0x1F000) >> 12;
     let sequence = id & 0xFFF;
@@ -61,25 +61,43 @@ impl Operation for UniversalIdsOp {
             OperationCategory::SystemDiagnostics,
         )
         .with_types(vec![DataType::Text, DataType::Json], vec![DataType::Json])
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec!["system".into(), "uuid".into(), "ulid".into(), "snowflake".into()])
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
-        let action = config.get("action").and_then(|v| v.as_str()).unwrap_or("generate");
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
+        let action = config
+            .get("action")
+            .and_then(|v| v.as_str())
+            .unwrap_or("generate");
 
         match action {
             "decode_snowflake" => {
-                let id_str = config.get("id")
+                let id_str = config
+                    .get("id")
                     .and_then(|v| v.as_str())
                     .or_else(|| input.as_str().ok())
                     .unwrap_or("175928847299117063");
 
-                let id: u64 = id_str.trim().parse().map_err(|_| OmniError::InvalidInput("Invalid numeric snowflake ID".into()))?;
+                let id: u64 = id_str
+                    .trim()
+                    .parse()
+                    .map_err(|_| OmniError::InvalidInput("Invalid numeric snowflake ID".into()))?;
                 // Default Discord epoch (2015-01-01) = 1420070400000 ms
-                let epoch = config.get("epoch_ms").and_then(|v| v.as_u64()).unwrap_or(1420070400000);
+                let epoch = config
+                    .get("epoch_ms")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(1420070400000);
                 Ok(DataPayload::json(decode_snowflake(id, epoch)))
             }
             "inspect_uuid" => {
-                let u_str = config.get("uuid")
+                let u_str = config
+                    .get("uuid")
                     .and_then(|v| v.as_str())
                     .or_else(|| input.as_str().ok())
                     .unwrap_or("00000000-0000-0000-0000-000000000000");

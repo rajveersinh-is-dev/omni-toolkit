@@ -73,14 +73,13 @@ impl Operation for PdfOcrLayoutOp {
             .get("mode")
             .and_then(|v| v.as_str())
             .unwrap_or("auto");
-        let lang = config
-            .get("lang")
-            .and_then(|v| v.as_str())
-            .unwrap_or("eng");
+        let lang = config.get("lang").and_then(|v| v.as_str()).unwrap_or("eng");
         let bytes = input.into_bytes();
 
         if bytes.is_empty() {
-            return Err(OmniError::InvalidInput("Empty input buffer supplied".into()));
+            return Err(OmniError::InvalidInput(
+                "Empty input buffer supplied".into(),
+            ));
         }
 
         let is_pdf = bytes.starts_with(b"%PDF");
@@ -105,8 +104,7 @@ impl Operation for PdfOcrLayoutOp {
                 }
             })?;
 
-            let work_dir =
-                std::env::temp_dir().join(format!("omni_ocr_{}", uuid::Uuid::new_v4()));
+            let work_dir = std::env::temp_dir().join(format!("omni_ocr_{}", uuid::Uuid::new_v4()));
             std::fs::create_dir_all(&work_dir).map_err(|e| OmniError::Io(e.to_string()))?;
             let _guard = TempDirGuard(work_dir.clone());
 
@@ -190,10 +188,7 @@ impl Operation for PdfOcrLayoutOp {
 
         for (page_num, _page_id) in pages {
             let extracted = doc.extract_text(&[page_num]).unwrap_or_default();
-            let lines: Vec<&str> = extracted
-                .lines()
-                .filter(|l| !l.trim().is_empty())
-                .collect();
+            let lines: Vec<&str> = extracted.lines().filter(|l| !l.trim().is_empty()).collect();
 
             page_results.push(json!({
                 "page_number": page_num,

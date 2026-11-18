@@ -224,13 +224,7 @@ impl DatabaseManager {
                 description = excluded.description,
                 definition_json = excluded.definition_json,
                 updated_at = excluded.updated_at",
-            params![
-                pipeline.id,
-                pipeline.name,
-                pipeline.description,
-                json,
-                now
-            ],
+            params![pipeline.id, pipeline.name, pipeline.description, json, now],
         )
         .map_err(|e| OmniError::Io(e.to_string()))?;
         Ok(())
@@ -259,7 +253,9 @@ impl DatabaseManager {
     pub fn list_pipelines(&self) -> OmniResult<Vec<PipelineSummary>> {
         let conn = self.lock_conn()?;
         let mut stmt = conn
-            .prepare("SELECT id, name, description, updated_at FROM pipelines ORDER BY updated_at DESC")
+            .prepare(
+                "SELECT id, name, description, updated_at FROM pipelines ORDER BY updated_at DESC",
+            )
             .map_err(|e| OmniError::Io(e.to_string()))?;
 
         let rows = stmt

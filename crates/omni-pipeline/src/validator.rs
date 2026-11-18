@@ -155,8 +155,7 @@ impl PipelineValidator {
 
             // Required named ports validation (only when ports are explicitly declared)
             if !target_manifest.input_ports.is_empty() && edges.len() > 1 {
-                let wired_ports: HashSet<&str> =
-                    edges.iter().map(|e| e.effective_port()).collect();
+                let wired_ports: HashSet<&str> = edges.iter().map(|e| e.effective_port()).collect();
                 for port in &target_manifest.input_ports {
                     if port.required && !wired_ports.contains(port.name.as_str()) {
                         return Err(OmniError::Validation(format!(

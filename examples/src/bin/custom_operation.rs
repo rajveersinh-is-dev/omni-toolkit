@@ -1,8 +1,8 @@
 //! Example: Implementing a custom OMNI Operation and registering it at runtime.
 
 use omni_core::{
-    async_trait, DataPayload, ExecutionContext, OmniResult,
-    Operation, OperationCategory, OperationManifest,
+    async_trait, DataPayload, ExecutionContext, OmniResult, Operation, OperationCategory,
+    OperationManifest,
 };
 use omni_registry::OperationRegistry;
 use std::sync::Arc;

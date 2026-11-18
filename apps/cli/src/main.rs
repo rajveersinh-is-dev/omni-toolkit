@@ -42,7 +42,11 @@ enum Commands {
             help = "Filter by category (e.g. Cryptography, Encoders, TextAndCode, Networking)"
         )]
         category: Option<String>,
-        #[arg(short, long, help = "Search query across ID, name, description, and tags")]
+        #[arg(
+            short,
+            long,
+            help = "Search query across ID, name, description, and tags"
+        )]
         query: Option<String>,
         #[arg(
             short,
@@ -74,7 +78,9 @@ enum Commands {
 
     #[command(about = "Universal encoding & decoding shortcut")]
     Encode {
-        #[arg(help = "Format (base16, base32, base45, base58, base62, base64, base85, base91, url)")]
+        #[arg(
+            help = "Format (base16, base32, base45, base58, base62, base64, base85, base91, url)"
+        )]
         format: String,
         #[arg(short, long, help = "Decode instead of encode")]
         decode: bool,
@@ -137,7 +143,9 @@ enum PipelineSubcommands {
         #[arg(help = "Initial input file (reads from stdin if omitted)")]
         input: Option<PathBuf>,
     },
-    #[command(about = "Validate a pipeline DAG for cycles, multi-input rules, and type compatibility")]
+    #[command(
+        about = "Validate a pipeline DAG for cycles, multi-input rules, and type compatibility"
+    )]
     Validate {
         #[arg(help = "Pipeline definition JSON file")]
         file: PathBuf,
@@ -161,7 +169,11 @@ fn read_input(path: Option<PathBuf>) -> io::Result<DataPayload> {
     }
 }
 
-fn write_output(payload: DataPayload, output_path: Option<PathBuf>, json_mode: bool) -> io::Result<()> {
+fn write_output(
+    payload: DataPayload,
+    output_path: Option<PathBuf>,
+    json_mode: bool,
+) -> io::Result<()> {
     if json_mode {
         let json = serde_json::to_string_pretty(&payload)?;
         if let Some(path) = output_path {
@@ -501,7 +513,10 @@ async fn main() -> anyhow::Result<()> {
             let state = AppState::new(registry.clone(), db, job_manager.clone(), config);
             let app = omni_api::create_router(state);
             let addr = format!("{}:{}", host, port);
-            println!("OMNI Backend server listening on http://{} ({})", addr, frontend_msg);
+            println!(
+                "OMNI Backend server listening on http://{} ({})",
+                addr, frontend_msg
+            );
 
             let listener = tokio::net::TcpListener::bind(&addr).await?;
             let jm_shutdown = job_manager.clone();
@@ -509,7 +524,10 @@ async fn main() -> anyhow::Result<()> {
                 .with_graceful_shutdown(async move {
                     let _ = tokio::signal::ctrl_c().await;
                     let cancelled = jm_shutdown.shutdown();
-                    eprintln!("\nShutting down OMNI server ({} active jobs cancelled)...", cancelled);
+                    eprintln!(
+                        "\nShutting down OMNI server ({} active jobs cancelled)...",
+                        cancelled
+                    );
                 })
                 .await?;
         }

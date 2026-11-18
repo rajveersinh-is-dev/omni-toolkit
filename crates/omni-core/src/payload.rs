@@ -123,12 +123,10 @@ impl DataPayload {
     pub fn into_text(self) -> OmniResult<String> {
         match self {
             DataPayload::Text(s) => Ok(s),
-            DataPayload::Bytes(b) => {
-                String::from_utf8(b).map_err(|e| OmniError::TypeMismatch {
-                    expected: "valid UTF-8 text".into(),
-                    found: format!("binary stream ({e})"),
-                })
-            }
+            DataPayload::Bytes(b) => String::from_utf8(b).map_err(|e| OmniError::TypeMismatch {
+                expected: "valid UTF-8 text".into(),
+                found: format!("binary stream ({e})"),
+            }),
             DataPayload::Json(v) => {
                 if let serde_json::Value::String(s) = v {
                     Ok(s)
@@ -163,12 +161,10 @@ impl DataPayload {
                 serde_json::from_str(&s)
                     .map_err(|e| OmniError::InvalidInput(format!("JSON parse error: {e}")))
             }
-            DataPayload::Multi(m) => {
-                serde_json::to_value(m).map_err(|e| OmniError::Execution {
-                    operation: "into_json".into(),
-                    message: e.to_string(),
-                })
-            }
+            DataPayload::Multi(m) => serde_json::to_value(m).map_err(|e| OmniError::Execution {
+                operation: "into_json".into(),
+                message: e.to_string(),
+            }),
         }
     }
 

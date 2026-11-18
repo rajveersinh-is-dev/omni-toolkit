@@ -116,7 +116,8 @@ impl OperationRegistry {
                     }
                 }
                 if let Some(ref out_ty) = filter.output_type {
-                    if !m.output_types.contains(out_ty) && !m.output_types.contains(&DataType::Any) {
+                    if !m.output_types.contains(out_ty) && !m.output_types.contains(&DataType::Any)
+                    {
                         return false;
                     }
                 }
@@ -234,8 +235,15 @@ mod tests {
         assert_eq!(results[0].id, "dummy.echo");
 
         // Filter by category
-        assert_eq!(reg.filter_by_category(OperationCategory::TextAndCode).len(), 1);
-        assert_eq!(reg.filter_by_category(OperationCategory::Cryptography).len(), 0);
+        assert_eq!(
+            reg.filter_by_category(OperationCategory::TextAndCode).len(),
+            1
+        );
+        assert_eq!(
+            reg.filter_by_category(OperationCategory::Cryptography)
+                .len(),
+            0
+        );
 
         // Filter by status and tag
         let filtered = reg.filter(&RegistryFilter {

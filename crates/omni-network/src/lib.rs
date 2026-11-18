@@ -89,4 +89,92 @@ mod tests {
         let json = res.into_json().unwrap();
         assert_eq!(json["payload_matches"], true);
     }
+
+    #[tokio::test]
+    async fn test_ip_calc_zero_prefix_split_and_large_socket_echo() {
+        let ctx = ExecutionContext::new("t_net_edge");
+
+        // 1. /0 split to /32 previously panicked with 2u32.pow(32) overflow!
+        let res = IpCalcOp
+            .execute(
+                DataPayload::text("0.0.0.0/0"),
+                serde_json::json!({ "split_to_prefix": 32 }),
+                &ctx,
+            )
+            .await
+            .unwrap()
+            .into_json()
+            .unwrap();
+        assert_eq!(res["split_subnets"].as_array().unwrap().len(), 64);
+
+        // Malformed double-slash CIDR rejected
+        assert!(IpCalcOp
+            .execute(
+                DataPayload::text("10.0.0.0/8/16"),
+                serde_json::json!({}),
+                &ctx
+            )
+            .await
+            .is_err());
+
+        // 2. Socket echo with 8192-byte payload (previously failed > 1024 bytes!)
+        let large_payload = vec![0x42u8; 8192];
+        let sock_res = SocketToolOp
+            .execute(
+                DataPayload::bytes(large_payload),
+                serde_json::json!({ "action": "echo_test" }),
+                &ctx,
+            )
+            .await
+            .unwrap()
+            .into_json()
+            .unwrap();
+        assert_eq!(sock_res["payload_matches"], true);
+        assert_eq!(sock_res["payload_bytes_received"], 8192);
+
+        // 3. SocketToolOp rejects out-of-range TCP port (65537 or 0)
+        assert!(SocketToolOp
+            .execute(
+                DataPayload::text(""),
+                serde_json::json!({ "action": "probe", "target": "127.0.0.1", "port": 65537 }),
+                &ctx,
+            )
+            .await
+            .is_err());
+
+        // 4. LabScannerOp WoL magic packet (6*0xFF + 16*MAC = 102 bytes) + >1024 port DoS guard
+        let wol = LabScannerOp
+            .execute(
+                DataPayload::text(""),
+                serde_json::json!({ "action": "wol", "mac": "AA:BB:CC:DD:EE:FF" }),
+                &ctx,
+            )
+            .await
+            .unwrap()
+            .into_json()
+            .unwrap();
+        assert_eq!(wol["magic_packet_size_bytes"], 102);
+        let too_many: Vec<u16> = (1..=1025).collect();
+        assert!(LabScannerOp
+            .execute(
+                DataPayload::text(""),
+                serde_json::json!({ "action": "scan", "target": "127.0.0.1", "ports": too_many }),
+                &ctx,
+            )
+            .await
+            .is_err());
+
+        // 5. DnsPowerSuiteOp rejects reserved label length bits (0x40/0x80)
+        let mut bad_dns = vec![0u8; 16];
+        bad_dns[5] = 1; // QDCOUNT = 1
+        bad_dns[12] = 0x80; // invalid reserved label octet
+        assert!(DnsPowerSuiteOp
+            .execute(
+                DataPayload::bytes(bad_dns),
+                serde_json::json!({ "action": "parse" }),
+                &ctx,
+            )
+            .await
+            .is_err());
+    }
 }

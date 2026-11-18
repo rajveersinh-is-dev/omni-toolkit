@@ -1,6 +1,6 @@
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniError, OmniResult, Operation,
-    OperationCategory, OperationManifest,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
+    Operation, OperationCategory, OperationManifest,
 };
 use serde_json::{json, Value};
 
@@ -15,31 +15,76 @@ impl Operation for BinaryHexOp {
             "Inspects, diffs, patches, byte-swaps, and performs bitwise transformations on raw binary streams",
             OperationCategory::BinaryAnalysis,
         )
-        .with_types(vec![DataType::Bytes, DataType::Text], vec![DataType::Json, DataType::Bytes, DataType::Text])
+        .with_types(
+            vec![DataType::Bytes, DataType::Text],
+            vec![DataType::Json, DataType::Bytes, DataType::Text],
+        )
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec!["binary".into(), "hex".into(), "bitwise".into()])
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
-        let action = config.get("action").and_then(|v| v.as_str()).unwrap_or("hexdump");
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
+        let action = config
+            .get("action")
+            .and_then(|v| v.as_str())
+            .unwrap_or("hexdump");
         let bytes = input.into_bytes();
 
         match action {
             "hexdump" => {
-                let bytes_per_line = config.get("width").and_then(|v| v.as_u64()).unwrap_or(16) as usize;
+                let width_u64 = config.get("width").and_then(|v| v.as_u64()).unwrap_or(16);
+                if !(1..=256).contains(&width_u64) {
+                    return Err(OmniError::Validation(
+                        "Hexdump 'width' must be between 1 and 256 bytes per line".into(),
+                    ));
+                }
+                let bytes_per_line = width_u64 as usize;
                 let mut lines = Vec::new();
 
                 for (line_idx, chunk) in bytes.chunks(bytes_per_line).enumerate() {
                     let offset = line_idx * bytes_per_line;
-                    let hex_part: Vec<String> = chunk.iter().map(|b| format!("{:02X}", b)).collect();
-                    let ascii_part: String = chunk.iter().map(|&b| if (32..=126).contains(&b) { b as char } else { '.' }).collect();
+                    let hex_part: Vec<String> =
+                        chunk.iter().map(|b| format!("{:02X}", b)).collect();
+                    let ascii_part: String = chunk
+                        .iter()
+                        .map(|&b| {
+                            if (32..=126).contains(&b) {
+                                b as char
+                            } else {
+                                '.'
+                            }
+                        })
+                        .collect();
 
                     let padding = "   ".repeat(bytes_per_line - chunk.len());
-                    lines.push(format!("{:08X}:  {}{}{}|{}|", offset, hex_part.join(" "), padding, if chunk.len() > 8 { " " } else { "" }, ascii_part));
+                    lines.push(format!(
+                        "{:08X}:  {}{}{}|{}|",
+                        offset,
+                        hex_part.join(" "),
+                        padding,
+                        if chunk.len() > 8 { " " } else { "" },
+                        ascii_part
+                    ));
                 }
 
                 Ok(DataPayload::text(lines.join("\n")))
             }
             "byte_swap" => {
-                let word_size = config.get("word_size").and_then(|v| v.as_u64()).unwrap_or(2) as usize;
+                let word_u64 = config
+                    .get("word_size")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(2);
+                if !(1..=64).contains(&word_u64) {
+                    return Err(OmniError::Validation(
+                        "byte_swap 'word_size' must be between 1 and 64 bytes".into(),
+                    ));
+                }
+                let word_size = word_u64 as usize;
                 let mut swapped = bytes.clone();
                 for chunk in swapped.chunks_exact_mut(word_size) {
                     chunk.reverse();
@@ -49,7 +94,8 @@ impl Operation for BinaryHexOp {
             "bitwise" => {
                 let op = config.get("op").and_then(|v| v.as_str()).unwrap_or("xor");
                 let key_str = config.get("key").and_then(|v| v.as_str()).unwrap_or("AA");
-                let key = hex::decode(key_str).map_err(|e| OmniError::InvalidInput(format!("Invalid key hex: {e}")))?;
+                let key = hex::decode(key_str)
+                    .map_err(|e| OmniError::InvalidInput(format!("Invalid key hex: {e}")))?;
                 if key.is_empty() {
                     return Err(OmniError::InvalidInput("Key cannot be empty".into()));
                 }
@@ -107,15 +153,31 @@ impl Operation for Ieee754VisualizerOp {
             OperationCategory::BinaryAnalysis,
         )
         .with_types(vec![DataType::Text, DataType::Json], vec![DataType::Json])
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec!["binary".into(), "ieee754".into(), "float".into()])
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
-        let val_f64 = config.get("value")
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
+        let val_f64 = config
+            .get("value")
             .and_then(|v| v.as_f64())
-            .or_else(|| input.as_str().ok().and_then(|s| s.trim().parse::<f64>().ok()))
+            .or_else(|| {
+                input
+                    .as_str()
+                    .ok()
+                    .and_then(|s| s.trim().parse::<f64>().ok())
+            })
             .unwrap_or(std::f64::consts::PI);
 
-        let precision = config.get("precision").and_then(|v| v.as_str()).unwrap_or("f64");
+        let precision = config
+            .get("precision")
+            .and_then(|v| v.as_str())
+            .unwrap_or("f64");
 
         if precision == "f32" {
             let val_f32 = val_f64 as f32;
@@ -125,16 +187,32 @@ impl Operation for Ieee754VisualizerOp {
             let mantissa = bits & 0x7FFFFF;
 
             let classification = if exponent == 0xFF {
-                if mantissa == 0 { "Infinity" } else { "NaN" }
+                if mantissa == 0 {
+                    "Infinity"
+                } else {
+                    "NaN"
+                }
             } else if exponent == 0 {
-                if mantissa == 0 { "Zero" } else { "Subnormal (Denormalized)" }
+                if mantissa == 0 {
+                    "Zero"
+                } else {
+                    "Subnormal (Denormalized)"
+                }
             } else {
                 "Normalized"
             };
 
-            let exp_unbiased = if exponent == 0 { -126 } else { (exponent as i32) - 127 };
+            let exp_unbiased = if exponent == 0 {
+                -126
+            } else {
+                (exponent as i32) - 127
+            };
             let fraction = mantissa as f64 / 8388608.0; // 2^23
-            let significand = if exponent == 0 { fraction } else { 1.0 + fraction };
+            let significand = if exponent == 0 {
+                fraction
+            } else {
+                1.0 + fraction
+            };
 
             Ok(DataPayload::json(json!({
                 "format": "IEEE-754 Binary32 (Single Precision)",
@@ -157,16 +235,32 @@ impl Operation for Ieee754VisualizerOp {
             let mantissa = bits & 0xFFFFFFFFFFFFF;
 
             let classification = if exponent == 0x7FF {
-                if mantissa == 0 { "Infinity" } else { "NaN" }
+                if mantissa == 0 {
+                    "Infinity"
+                } else {
+                    "NaN"
+                }
             } else if exponent == 0 {
-                if mantissa == 0 { "Zero" } else { "Subnormal (Denormalized)" }
+                if mantissa == 0 {
+                    "Zero"
+                } else {
+                    "Subnormal (Denormalized)"
+                }
             } else {
                 "Normalized"
             };
 
-            let exp_unbiased = if exponent == 0 { -1022 } else { (exponent as i64) - 1023 };
+            let exp_unbiased = if exponent == 0 {
+                -1022
+            } else {
+                (exponent as i64) - 1023
+            };
             let fraction = mantissa as f64 / 4503599627370496.0; // 2^52
-            let significand = if exponent == 0 { fraction } else { 1.0 + fraction };
+            let significand = if exponent == 0 {
+                fraction
+            } else {
+                1.0 + fraction
+            };
 
             Ok(DataPayload::json(json!({
                 "format": "IEEE-754 Binary64 (Double Precision)",

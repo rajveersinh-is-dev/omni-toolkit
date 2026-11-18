@@ -1,7 +1,7 @@
 use goblin::Object;
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniError, OmniResult, Operation,
-    OperationCategory, OperationManifest,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
+    Operation, OperationCategory, OperationManifest,
 };
 use serde_json::{json, Value};
 
@@ -17,21 +17,30 @@ impl Operation for ExecutableInspectorOp {
             OperationCategory::BinaryAnalysis,
         )
         .with_types(vec![DataType::Bytes], vec![DataType::Json])
+        .with_status(FeatureStatus::Verified)
     }
 
-    async fn execute(&self, input: DataPayload, _config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
+    async fn execute(
+        &self,
+        input: DataPayload,
+        _config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
         let bytes = input.into_bytes();
         if bytes.len() < 4 {
-            return Err(OmniError::InvalidInput("Buffer too small for executable header".into()));
+            return Err(OmniError::InvalidInput(
+                "Buffer too small for executable header".into(),
+            ));
         }
 
-        // Check WebAssembly magic (\0asm)
+        // Check WebAssembly magic (\0asm + 4-byte version header = 8 bytes minimum)
         if bytes.starts_with(&[0x00, 0x61, 0x73, 0x6D]) {
-            let version = if bytes.len() >= 8 {
-                u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]])
-            } else {
-                1
-            };
+            if bytes.len() < 8 {
+                return Err(OmniError::InvalidInput(
+                    "Truncated WebAssembly binary header (requires at least 8 bytes)".into(),
+                ));
+            }
+            let version = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]);
 
             return Ok(DataPayload::json(json!({
                 "format": "WebAssembly (.wasm)",
@@ -41,27 +50,40 @@ impl Operation for ExecutableInspectorOp {
             })));
         }
 
-        let parsed = Object::parse(&bytes)
-            .map_err(|e| OmniError::InvalidInput(format!("Failed to parse executable format: {e}")))?;
+        let parsed = Object::parse(&bytes).map_err(|e| {
+            OmniError::InvalidInput(format!("Failed to parse executable format: {e}"))
+        })?;
 
         match parsed {
             Object::Elf(elf) => {
-                let sections: Vec<Value> = elf.section_headers.iter().map(|sh| {
-                    let name = elf.shdr_strtab.get_at(sh.sh_name).unwrap_or("<unknown>");
-                    json!({
-                        "name": name,
-                        "type": sh.sh_type,
-                        "flags": format!("0x{:X}", sh.sh_flags),
-                        "addr": format!("0x{:X}", sh.sh_addr),
-                        "offset": format!("0x{:X}", sh.sh_offset),
-                        "size": sh.sh_size,
+                let sections: Vec<Value> = elf
+                    .section_headers
+                    .iter()
+                    .map(|sh| {
+                        let name = elf.shdr_strtab.get_at(sh.sh_name).unwrap_or("<unknown>");
+                        json!({
+                            "name": name,
+                            "type": sh.sh_type,
+                            "flags": format!("0x{:X}", sh.sh_flags),
+                            "addr": format!("0x{:X}", sh.sh_addr),
+                            "offset": format!("0x{:X}", sh.sh_offset),
+                            "size": sh.sh_size,
+                        })
                     })
-                }).collect();
+                    .collect();
 
                 let is_pie = elf.header.e_type == goblin::elf::header::ET_DYN;
-                let has_canary = elf.dynsyms.iter().any(|s| elf.dynstrtab.get_at(s.st_name) == Some("__stack_chk_fail"));
-                let nx = elf.program_headers.iter().any(|ph| ph.p_type == goblin::elf::program_header::PT_GNU_STACK && (ph.p_flags & 1) == 0);
-                let relro = elf.program_headers.iter().any(|ph| ph.p_type == goblin::elf::program_header::PT_GNU_RELRO);
+                let has_canary = elf
+                    .dynsyms
+                    .iter()
+                    .any(|s| elf.dynstrtab.get_at(s.st_name) == Some("__stack_chk_fail"));
+                let nx = elf.program_headers.iter().any(|ph| {
+                    ph.p_type == goblin::elf::program_header::PT_GNU_STACK && (ph.p_flags & 1) == 0
+                });
+                let relro = elf
+                    .program_headers
+                    .iter()
+                    .any(|ph| ph.p_type == goblin::elf::program_header::PT_GNU_RELRO);
 
                 Ok(DataPayload::json(json!({
                     "format": "ELF",
@@ -80,15 +102,21 @@ impl Operation for ExecutableInspectorOp {
                 })))
             }
             Object::PE(pe) => {
-                let sections: Vec<Value> = pe.sections.iter().map(|s| {
-                    let name = String::from_utf8_lossy(&s.name).trim_matches('\0').to_string();
-                    json!({
-                        "name": name,
-                        "virtual_address": format!("0x{:X}", s.virtual_address),
-                        "virtual_size": s.virtual_size,
-                        "raw_data_size": s.size_of_raw_data,
+                let sections: Vec<Value> = pe
+                    .sections
+                    .iter()
+                    .map(|s| {
+                        let name = String::from_utf8_lossy(&s.name)
+                            .trim_matches('\0')
+                            .to_string();
+                        json!({
+                            "name": name,
+                            "virtual_address": format!("0x{:X}", s.virtual_address),
+                            "virtual_size": s.virtual_size,
+                            "raw_data_size": s.size_of_raw_data,
+                        })
                     })
-                }).collect();
+                    .collect();
 
                 let mut imports = Vec::new();
                 for imp in &pe.imports {
@@ -98,7 +126,11 @@ impl Operation for ExecutableInspectorOp {
                     }));
                 }
 
-                let dll_char = pe.header.optional_header.map(|h| h.windows_fields.dll_characteristics).unwrap_or(0);
+                let dll_char = pe
+                    .header
+                    .optional_header
+                    .map(|h| h.windows_fields.dll_characteristics)
+                    .unwrap_or(0);
                 let dynamic_base = (dll_char & 0x0040) != 0; // ASLR
                 let nx_compat = (dll_char & 0x0100) != 0; // DEP/NX
                 let cfg = (dll_char & 0x4000) != 0; // Control Flow Guard
@@ -118,23 +150,17 @@ impl Operation for ExecutableInspectorOp {
                     }
                 })))
             }
-            Object::Mach(mach) => {
-                Ok(DataPayload::json(json!({
-                    "format": "Mach-O (macOS/iOS Executable)",
-                    "details": format!("{:?}", mach),
-                })))
-            }
-            Object::Archive(_) => {
-                Ok(DataPayload::json(json!({
-                    "format": "Unix Static Archive (.a / .lib)",
-                })))
-            }
-            _ => {
-                Ok(DataPayload::json(json!({
-                    "format": "Generic Binary",
-                    "size": bytes.len(),
-                })))
-            }
+            Object::Mach(mach) => Ok(DataPayload::json(json!({
+                "format": "Mach-O (macOS/iOS Executable)",
+                "details": format!("{:?}", mach),
+            }))),
+            Object::Archive(_) => Ok(DataPayload::json(json!({
+                "format": "Unix Static Archive (.a / .lib)",
+            }))),
+            _ => Ok(DataPayload::json(json!({
+                "format": "Generic Binary",
+                "size": bytes.len(),
+            }))),
         }
     }
 }

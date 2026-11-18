@@ -1,6 +1,6 @@
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniError, OmniResult, Operation,
-    OperationCategory, OperationManifest,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
+    Operation, OperationCategory, OperationManifest,
 };
 use serde_json::Value;
 
@@ -17,9 +17,16 @@ impl Operation for ShannonEntropyOp {
             OperationCategory::Cryptography,
         )
         .with_types(vec![DataType::Bytes, DataType::Text], vec![DataType::Json])
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec!["crypto".into(), "entropy".into(), "forensics".into()])
     }
 
-    async fn execute(&self, input: DataPayload, _config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
+    async fn execute(
+        &self,
+        input: DataPayload,
+        _config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
         let bytes = input.into_bytes();
         if bytes.is_empty() {
             return Ok(DataPayload::json(serde_json::json!({
@@ -81,28 +88,45 @@ impl Operation for LsbSteganographyOp {
             OperationCategory::Cryptography,
         )
         .with_types(vec![DataType::Bytes], vec![DataType::Bytes, DataType::Text])
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec!["crypto".into(), "steganography".into(), "lsb".into()])
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
-        let action = config.get("action").and_then(|v| v.as_str()).unwrap_or("extract");
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
+        let action = config
+            .get("action")
+            .and_then(|v| v.as_str())
+            .unwrap_or("extract");
         let mut carrier_bytes = input.into_bytes();
 
         match action {
             "inject" => {
-                let secret = config.get("secret").and_then(|v| v.as_str())
-                    .ok_or_else(|| OmniError::Validation("Missing 'secret' text to inject".into()))?;
+                let secret = config
+                    .get("secret")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        OmniError::Validation("Missing 'secret' text to inject".into())
+                    })?;
                 let secret_bytes = secret.as_bytes();
-                let secret_len = secret_bytes.len() as u32;
+                let secret_len = u32::try_from(secret_bytes.len()).map_err(|_| {
+                    OmniError::Validation("Secret payload exceeds 4 GiB header capacity".into())
+                })?;
 
                 // Prepend 4 bytes length header
                 let mut data_to_embed = secret_len.to_be_bytes().to_vec();
                 data_to_embed.extend_from_slice(secret_bytes);
 
-                let bits_needed = data_to_embed.len() * 8;
+                let bits_needed = data_to_embed.len().saturating_mul(8);
                 if carrier_bytes.len() < bits_needed {
                     return Err(OmniError::Validation(format!(
                         "Carrier payload too small. Need {} bytes, got {}",
-                        bits_needed, carrier_bytes.len()
+                        bits_needed,
+                        carrier_bytes.len()
                     )));
                 }
 
@@ -119,7 +143,9 @@ impl Operation for LsbSteganographyOp {
             }
             "extract" => {
                 if carrier_bytes.len() < 32 {
-                    return Err(OmniError::InvalidInput("Carrier stream too small to extract header".into()));
+                    return Err(OmniError::InvalidInput(
+                        "Carrier stream too small to extract header".into(),
+                    ));
                 }
 
                 // Extract 4 bytes length
@@ -135,8 +161,12 @@ impl Operation for LsbSteganographyOp {
                 }
                 let len = u32::from_be_bytes(len_bytes) as usize;
 
-                if len > carrier_bytes.len() / 8 {
-                    return Err(OmniError::InvalidInput("No valid embedded secret found (length header out of bounds)".into()));
+                // Remaining carrier bytes after the 32-bit length header
+                let available_payload_bytes = (carrier_bytes.len() - 32) / 8;
+                if len > available_payload_bytes {
+                    return Err(OmniError::InvalidInput(
+                        "No valid embedded secret found (length header out of bounds)".into(),
+                    ));
                 }
 
                 let mut secret = Vec::with_capacity(len);
@@ -149,11 +179,15 @@ impl Operation for LsbSteganographyOp {
                     secret.push(b);
                 }
 
-                let text = String::from_utf8(secret)
-                    .map_err(|e| OmniError::InvalidInput(format!("Extracted bytes not UTF-8: {e}")))?;
+                let text = String::from_utf8(secret).map_err(|e| {
+                    OmniError::InvalidInput(format!("Extracted bytes not UTF-8: {e}"))
+                })?;
                 Ok(DataPayload::text(text))
             }
-            _ => Err(OmniError::Validation(format!("Unknown action '{}'", action))),
+            _ => Err(OmniError::Validation(format!(
+                "Unknown action '{}'",
+                action
+            ))),
         }
     }
 }

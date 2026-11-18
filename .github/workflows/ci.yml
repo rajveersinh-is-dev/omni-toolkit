@@ -41,6 +41,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
+      - name: Cargo Format Check
+        run: cargo fmt --all -- --check
+
       - name: Cargo Check (all targets)
         run: cargo check --workspace --all-targets
 

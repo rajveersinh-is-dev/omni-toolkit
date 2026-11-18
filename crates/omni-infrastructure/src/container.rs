@@ -1,5 +1,5 @@
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniResult, Operation,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniResult, Operation,
     OperationCategory, OperationManifest,
 };
 use serde_json::{json, Value};
@@ -31,18 +31,23 @@ fn lint_dockerfile(content: &str) -> Vec<LintFinding> {
         let upper = trimmed.to_uppercase();
 
         if upper.starts_with("FROM ")
-            && (upper.contains(":LATEST") || (!upper.contains(':') && !upper.contains('@') && !upper.contains("AS "))) {
+            && (upper.contains(":LATEST")
+                || (!upper.contains(':') && !upper.contains('@') && !upper.contains("AS ")))
+        {
             findings.push(LintFinding {
                 line: line_num,
                 severity: "Warning".into(),
                 rule: "DL3006".into(),
-                message: "Always specify an explicit tag or digest instead of using 'latest'".into(),
+                message: "Always specify an explicit tag or digest instead of using 'latest'"
+                    .into(),
             });
         }
 
         if upper.starts_with("USER ") {
             has_user_directive = true;
-            if upper.contains("ROOT") || upper.contains(" 0") {
+            let user_spec = trimmed[5..].split_whitespace().next().unwrap_or("");
+            let user_only = user_spec.split(':').next().unwrap_or("");
+            if user_only.eq_ignore_ascii_case("root") || user_only == "0" {
                 findings.push(LintFinding {
                     line: line_num,
                     severity: "Error".into(),
@@ -53,7 +58,12 @@ fn lint_dockerfile(content: &str) -> Vec<LintFinding> {
         }
 
         if upper.starts_with("RUN ") {
-            if (trimmed.contains("curl ") || trimmed.contains("wget ")) && (trimmed.contains("| sh") || trimmed.contains("| bash") || trimmed.contains("|sh") || trimmed.contains("|bash")) {
+            if (trimmed.contains("curl ") || trimmed.contains("wget "))
+                && (trimmed.contains("| sh")
+                    || trimmed.contains("| bash")
+                    || trimmed.contains("|sh")
+                    || trimmed.contains("|bash"))
+            {
                 findings.push(LintFinding {
                     line: line_num,
                     severity: "Error".into(),
@@ -73,12 +83,18 @@ fn lint_dockerfile(content: &str) -> Vec<LintFinding> {
 
         if upper.starts_with("ENV ") || upper.starts_with("ARG ") {
             let lower = trimmed.to_lowercase();
-            if lower.contains("pass") || lower.contains("secret") || lower.contains("token") || lower.contains("key") {
+            if lower.contains("pass")
+                || lower.contains("secret")
+                || lower.contains("token")
+                || lower.contains("key")
+            {
                 findings.push(LintFinding {
                     line: line_num,
                     severity: "Critical".into(),
                     rule: "SEC-SECRET".into(),
-                    message: "Potential sensitive credential or secret embedded in Dockerfile ENV/ARG".into(),
+                    message:
+                        "Potential sensitive credential or secret embedded in Dockerfile ENV/ARG"
+                            .into(),
                 });
             }
         }
@@ -106,10 +122,19 @@ impl Operation for ContainerForensicsOp {
             OperationCategory::CloudAndDevOps,
         )
         .with_types(vec![DataType::Text, DataType::Bytes], vec![DataType::Json])
+        .with_status(FeatureStatus::Verified)
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
-        let action = config.get("action").and_then(|v| v.as_str()).unwrap_or("auto");
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
+        let action = config
+            .get("action")
+            .and_then(|v| v.as_str())
+            .unwrap_or("auto");
 
         // If input is text or explicitly requested Dockerfile linting
         if action == "lint" || input.data_type() == DataType::Text {
@@ -131,7 +156,10 @@ impl Operation for ContainerForensicsOp {
 
         if let Ok(entries) = archive.entries() {
             for entry in entries.flatten() {
-                let path = entry.path().map(|p| p.display().to_string()).unwrap_or_default();
+                let path = entry
+                    .path()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_default();
                 let size = entry.size();
 
                 if path == "manifest.json" {

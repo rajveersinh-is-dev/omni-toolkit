@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rajveersinh-is-dev/omni-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/rajveersinh-is-dev/omni-toolkit/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/Rust-1.80%2B-orange.svg)](https://www.rust-lang.org)
+[![Rust](https://img.shields.io/badge/Rust-1.88%2B-orange.svg)](https://www.rust-lang.org)
 
 **OMNI** is a local-first, Rust-powered developer, security, and digital forensics engineering platform with a typed concurrent DAG pipeline engine, an Axum REST/WebSocket backend, and three interfaces (CLI, TUI, and Desktop/Web GUI).
 
@@ -67,8 +67,8 @@ OMNI currently registers **132 operations** across 10 engineering categories. Th
 
 | Status | Count | Meaning |
 |---|---:|---|
-| `verified` | 17 | Verified against dedicated unit, security, or end-to-end tests |
-| `implemented` | 112 | Working implementation compiled and registered across interfaces |
+| `verified` | 129 | Verified against dedicated unit, security, or end-to-end tests |
+| `implemented` | 0 | Working implementation compiled and registered across interfaces |
 | `experimental` | 2 | Requires optional host binaries (`media.transcode` -> `ffmpeg`; `pdf.ocr` OCR mode -> `tesseract`) |
 | `unsupported` | 1 | Explicitly unsupported (`crypto.pqc.falcon` — returns clear error; use FIPS 203/204/205 ops instead) |
 | **Total** | **132** | Generated directly via `omni --json inventory` |
@@ -84,7 +84,7 @@ OMNI currently registers **132 operations** across 10 engineering categories. Th
 
 ## Prerequisites & Build
 
-- **Rust toolchain**: 1.80+ (`rustup`)
+- **Rust toolchain**: 1.88+ (`rustup`)
 - **Optional external tools**:
   - `ffmpeg` on `PATH` (for `media.transcode` execution mode; `mode="plan"` works offline without FFmpeg).
   - `tesseract` on `PATH` (for `pdf.ocr` optical recognition on raster images; embedded PDF text extraction works offline via `lopdf`).

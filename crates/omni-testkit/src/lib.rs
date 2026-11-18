@@ -190,7 +190,8 @@ impl OperationHarness {
             if let Some(expected) = &first_output {
                 if expected != &bytes {
                     return Err(OmniError::Validation(
-                        "Non-deterministic execution detected: outputs differ across iterations".into(),
+                        "Non-deterministic execution detected: outputs differ across iterations"
+                            .into(),
                     ));
                 }
             } else {

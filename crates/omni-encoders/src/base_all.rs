@@ -1,6 +1,6 @@
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniError, OmniResult, Operation,
-    OperationCategory, OperationManifest,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
+    Operation, OperationCategory, OperationManifest,
 };
 use serde_json::Value;
 
@@ -15,15 +15,29 @@ impl Operation for Base16Op {
             "Encodes and decodes hexadecimal strings according to RFC 4648",
             OperationCategory::Encoders,
         )
-        .with_types(vec![DataType::Bytes, DataType::Text], vec![DataType::Text, DataType::Bytes])
+        .with_types(
+            vec![DataType::Bytes, DataType::Text],
+            vec![DataType::Text, DataType::Bytes],
+        )
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec!["encode".into(), "base16".into(), "hex".into()])
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
-        let decode = config.get("decode").and_then(|v| v.as_bool()).unwrap_or(false);
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
+        let decode = config
+            .get("decode")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         if decode {
             let s = input.into_text()?;
             let cleaned: String = s.chars().filter(|c| !c.is_whitespace()).collect();
-            let bytes = hex::decode(&cleaned).map_err(|e| OmniError::InvalidInput(format!("Invalid hex string: {e}")))?;
+            let bytes = hex::decode(&cleaned)
+                .map_err(|e| OmniError::InvalidInput(format!("Invalid hex string: {e}")))?;
             Ok(DataPayload::bytes(bytes))
         } else {
             let bytes = input.into_bytes();
@@ -42,15 +56,33 @@ pub struct Base32Op {
 impl Operation for Base32Op {
     fn manifest(&self) -> OperationManifest {
         let (id, name, desc) = if self.is_hex {
-            ("encode.base32hex", "Base32Hex", "Base32 with extended hex alphabet (RFC 4648)")
+            (
+                "encode.base32hex",
+                "Base32Hex",
+                "Base32 with extended hex alphabet (RFC 4648)",
+            )
         } else {
-            ("encode.base32", "Base32", "Standard Base32 encoding (RFC 4648)")
+            (
+                "encode.base32",
+                "Base32",
+                "Standard Base32 encoding (RFC 4648)",
+            )
         };
         OperationManifest::new(id, name, desc, OperationCategory::Encoders)
+            .with_status(FeatureStatus::Verified)
+            .with_tags(vec!["encode".into(), id.into()])
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
-        let decode = config.get("decode").and_then(|v| v.as_bool()).unwrap_or(false);
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
+        let decode = config
+            .get("decode")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let codec = if self.is_hex {
             &data_encoding::BASE32HEX
         } else {
@@ -60,7 +92,9 @@ impl Operation for Base32Op {
         if decode {
             let s = input.into_text()?;
             let cleaned: String = s.chars().filter(|c| !c.is_whitespace()).collect();
-            let bytes = codec.decode(cleaned.as_bytes()).map_err(|e| OmniError::InvalidInput(format!("Base32 decode error: {e}")))?;
+            let bytes = codec
+                .decode(cleaned.as_bytes())
+                .map_err(|e| OmniError::InvalidInput(format!("Base32 decode error: {e}")))?;
             Ok(DataPayload::bytes(bytes))
         } else {
             let bytes = input.into_bytes();
@@ -81,35 +115,94 @@ impl Operation for Base45Op {
             "Base45 encoding used in QR codes and Digital COVID Certificates (RFC 9285)",
             OperationCategory::Encoders,
         )
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec!["encode".into(), "base45".into(), "rfc9285".into()])
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
-        let decode = config.get("decode").and_then(|v| v.as_bool()).unwrap_or(false);
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
+        let decode = config
+            .get("decode")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         const CHARSET: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
 
         if decode {
             let s = input.into_text()?;
-            let chars: Vec<u8> = s.bytes().filter(|b| *b != b'\r' && *b != b'\n' && *b != b'\t').collect();
+            let chars: Vec<u8> = s
+                .bytes()
+                .filter(|b| *b != b'\r' && *b != b'\n' && *b != b'\t')
+                .collect();
             if chars.len() % 3 == 1 {
-                return Err(OmniError::InvalidInput("Base45 input length cannot be 1 mod 3".into()));
+                return Err(OmniError::InvalidInput(
+                    "Base45 input length cannot be 1 mod 3".into(),
+                ));
             }
 
-            let mut out = Vec::new();
+            let mut out = Vec::with_capacity((chars.len() / 3) * 2 + 1);
             let mut i = 0;
             while i < chars.len() {
                 let remaining = chars.len() - i;
                 if remaining >= 3 {
-                    let c0 = CHARSET.iter().position(|&x| x == chars[i]).ok_or_else(|| OmniError::InvalidInput(format!("Invalid base45 char: {}", chars[i] as char)))?;
-                    let c1 = CHARSET.iter().position(|&x| x == chars[i+1]).ok_or_else(|| OmniError::InvalidInput(format!("Invalid base45 char: {}", chars[i+1] as char)))?;
-                    let c2 = CHARSET.iter().position(|&x| x == chars[i+2]).ok_or_else(|| OmniError::InvalidInput(format!("Invalid base45 char: {}", chars[i+2] as char)))?;
+                    let c0 = CHARSET.iter().position(|&x| x == chars[i]).ok_or_else(|| {
+                        OmniError::InvalidInput(format!(
+                            "Invalid base45 char: {}",
+                            chars[i] as char
+                        ))
+                    })?;
+                    let c1 = CHARSET
+                        .iter()
+                        .position(|&x| x == chars[i + 1])
+                        .ok_or_else(|| {
+                            OmniError::InvalidInput(format!(
+                                "Invalid base45 char: {}",
+                                chars[i + 1] as char
+                            ))
+                        })?;
+                    let c2 = CHARSET
+                        .iter()
+                        .position(|&x| x == chars[i + 2])
+                        .ok_or_else(|| {
+                            OmniError::InvalidInput(format!(
+                                "Invalid base45 char: {}",
+                                chars[i + 2] as char
+                            ))
+                        })?;
                     let val = c0 + c1 * 45 + c2 * 45 * 45;
+                    if val > 65535 {
+                        return Err(OmniError::InvalidInput(format!(
+                            "Base45 3-character group overflows 16-bit value ({val} > 65535)"
+                        )));
+                    }
                     out.push((val / 256) as u8);
                     out.push((val % 256) as u8);
                     i += 3;
                 } else if remaining == 2 {
-                    let c0 = CHARSET.iter().position(|&x| x == chars[i]).ok_or_else(|| OmniError::InvalidInput(format!("Invalid base45 char: {}", chars[i] as char)))?;
-                    let c1 = CHARSET.iter().position(|&x| x == chars[i+1]).ok_or_else(|| OmniError::InvalidInput(format!("Invalid base45 char: {}", chars[i+1] as char)))?;
+                    let c0 = CHARSET.iter().position(|&x| x == chars[i]).ok_or_else(|| {
+                        OmniError::InvalidInput(format!(
+                            "Invalid base45 char: {}",
+                            chars[i] as char
+                        ))
+                    })?;
+                    let c1 = CHARSET
+                        .iter()
+                        .position(|&x| x == chars[i + 1])
+                        .ok_or_else(|| {
+                            OmniError::InvalidInput(format!(
+                                "Invalid base45 char: {}",
+                                chars[i + 1] as char
+                            ))
+                        })?;
                     let val = c0 + c1 * 45;
+                    if val > 255 {
+                        return Err(OmniError::InvalidInput(format!(
+                            "Base45 2-character group overflows 8-bit value ({val} > 255)"
+                        )));
+                    }
                     out.push(val as u8);
                     i += 2;
                 }
@@ -117,7 +210,7 @@ impl Operation for Base45Op {
             Ok(DataPayload::bytes(out))
         } else {
             let bytes = input.into_bytes();
-            let mut out = String::new();
+            let mut out = String::with_capacity((bytes.len() / 2) * 3 + 2);
             let mut i = 0;
             while i < bytes.len() {
                 if i + 1 < bytes.len() {
@@ -154,14 +247,26 @@ impl Operation for Base58Op {
             "Base58 encoding as used in Bitcoin and IPFS",
             OperationCategory::Encoders,
         )
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec!["encode".into(), "base58".into()])
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
-        let decode = config.get("decode").and_then(|v| v.as_bool()).unwrap_or(false);
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
+        let decode = config
+            .get("decode")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         if decode {
             let s = input.into_text()?;
             let cleaned: String = s.chars().filter(|c| !c.is_whitespace()).collect();
-            let bytes = bs58::decode(&cleaned).into_vec().map_err(|e| OmniError::InvalidInput(format!("Base58 decode error: {e}")))?;
+            let bytes = bs58::decode(&cleaned)
+                .into_vec()
+                .map_err(|e| OmniError::InvalidInput(format!("Base58 decode error: {e}")))?;
             Ok(DataPayload::bytes(bytes))
         } else {
             let bytes = input.into_bytes();
@@ -179,22 +284,38 @@ impl Operation for Base62Op {
         OperationManifest::new(
             "encode.base62",
             "Base62",
-            "Alphanumeric Base62 encoding [0-9a-zA-Z]",
+            "Alphanumeric Base62 encoding [0-9a-zA-Z] with leading-zero preservation",
             OperationCategory::Encoders,
         )
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec!["encode".into(), "base62".into()])
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
-        let decode = config.get("decode").and_then(|v| v.as_bool()).unwrap_or(false);
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
+        let decode = config
+            .get("decode")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         const B62_CHARS: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
         if decode {
             let s = input.into_text()?;
             let cleaned: String = s.chars().filter(|c| !c.is_whitespace()).collect();
+            if cleaned.is_empty() {
+                return Ok(DataPayload::bytes(Vec::new()));
+            }
+            let leading_zeros = cleaned.bytes().take_while(|&b| b == b'0').count();
             // Arbitrary precision base conversion
             let mut num: Vec<u8> = Vec::new();
             for c in cleaned.bytes() {
-                let val = B62_CHARS.iter().position(|&x| x == c).ok_or_else(|| OmniError::InvalidInput(format!("Invalid Base62 char: {}", c as char)))? as u32;
+                let val = B62_CHARS.iter().position(|&x| x == c).ok_or_else(|| {
+                    OmniError::InvalidInput(format!("Invalid Base62 char: {}", c as char))
+                })? as u32;
                 let mut carry = val;
                 for digit in num.iter_mut() {
                     let total = (*digit as u32) * 62 + carry;
@@ -207,14 +328,18 @@ impl Operation for Base62Op {
                 }
             }
             num.reverse();
-            Ok(DataPayload::bytes(num))
+            let mut out = Vec::with_capacity(leading_zeros + num.len());
+            out.resize(leading_zeros, 0u8);
+            out.extend_from_slice(&num);
+            Ok(DataPayload::bytes(out))
         } else {
             let bytes = input.into_bytes();
             if bytes.is_empty() {
                 return Ok(DataPayload::text(""));
             }
+            let leading_zeros = bytes.iter().take_while(|&&b| b == 0).count();
             let mut num: Vec<u8> = Vec::new();
-            for &b in &bytes {
+            for &b in &bytes[leading_zeros..] {
                 let mut carry = b as u32;
                 for digit in num.iter_mut() {
                     let total = (*digit as u32) * 256 + carry;
@@ -227,7 +352,13 @@ impl Operation for Base62Op {
                 }
             }
             num.reverse();
-            let res: String = num.into_iter().map(|d| B62_CHARS[d as usize] as char).collect();
+            let mut res = String::with_capacity(leading_zeros + num.len());
+            for _ in 0..leading_zeros {
+                res.push('0');
+            }
+            for d in num {
+                res.push(B62_CHARS[d as usize] as char);
+            }
             Ok(DataPayload::text(res))
         }
     }
@@ -242,16 +373,34 @@ pub struct Base64Op {
 impl Operation for Base64Op {
     fn manifest(&self) -> OperationManifest {
         let (id, name, desc) = if self.is_url_safe {
-            ("encode.base64url", "Base64URL", "URL-safe Base64 encoding without padding (RFC 4648)")
+            (
+                "encode.base64url",
+                "Base64URL",
+                "URL-safe Base64 encoding without padding (RFC 4648)",
+            )
         } else {
-            ("encode.base64", "Base64", "Standard Base64 encoding (RFC 4648)")
+            (
+                "encode.base64",
+                "Base64",
+                "Standard Base64 encoding (RFC 4648)",
+            )
         };
         OperationManifest::new(id, name, desc, OperationCategory::Encoders)
+            .with_status(FeatureStatus::Verified)
+            .with_tags(vec!["encode".into(), id.into()])
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
         use base64::prelude::*;
-        let decode = config.get("decode").and_then(|v| v.as_bool()).unwrap_or(false);
+        let decode = config
+            .get("decode")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let engine = if self.is_url_safe {
             BASE64_URL_SAFE_NO_PAD
         } else {
@@ -261,7 +410,9 @@ impl Operation for Base64Op {
         if decode {
             let s = input.into_text()?;
             let cleaned: String = s.chars().filter(|c| !c.is_whitespace()).collect();
-            let bytes = engine.decode(cleaned.as_bytes()).map_err(|e| OmniError::InvalidInput(format!("Base64 decode error: {e}")))?;
+            let bytes = engine
+                .decode(cleaned.as_bytes())
+                .map_err(|e| OmniError::InvalidInput(format!("Base64 decode error: {e}")))?;
             Ok(DataPayload::bytes(bytes))
         } else {
             let bytes = input.into_bytes();
@@ -282,15 +433,25 @@ impl Operation for Base85Op {
             "Adobe Ascii85 / Base85 encoding",
             OperationCategory::Encoders,
         )
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec!["encode".into(), "base85".into(), "ascii85".into()])
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
-        let decode = config.get("decode").and_then(|v| v.as_bool()).unwrap_or(false);
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
+        let decode = config
+            .get("decode")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         if decode {
             let s = input.into_text()?;
             let cleaned: String = s.chars().filter(|c| !c.is_whitespace()).collect();
             let bytes = cleaned.as_bytes();
-            let mut out = Vec::new();
+            let mut out = Vec::with_capacity((bytes.len() / 5) * 4 + 4);
             let mut i = 0;
             while i < bytes.len() {
                 if bytes[i] == b'z' {
@@ -301,29 +462,45 @@ impl Operation for Base85Op {
                 let mut chunk = [0u8; 5];
                 let mut count = 0;
                 while count < 5 && i < bytes.len() {
+                    if bytes[i] == b'z' {
+                        return Err(OmniError::InvalidInput(
+                            "Unexpected 'z' inside Ascii85 5-character tuple".into(),
+                        ));
+                    }
                     chunk[count] = bytes[i];
                     count += 1;
                     i += 1;
                 }
+                if count == 1 {
+                    return Err(OmniError::InvalidInput(
+                        "Invalid Ascii85 input: lone trailing character".into(),
+                    ));
+                }
                 for item in chunk.iter_mut().skip(count) {
                     *item = b'u'; // pad with 'u' (84)
                 }
-                let mut val: u32 = 0;
+                let mut val: u64 = 0;
                 for &b in &chunk {
                     if !(33..=117).contains(&b) {
-                        return Err(OmniError::InvalidInput(format!("Invalid Ascii85 character: {}", b as char)));
+                        return Err(OmniError::InvalidInput(format!(
+                            "Invalid Ascii85 character: {}",
+                            b as char
+                        )));
                     }
-                    val = val * 85 + (b - 33) as u32;
+                    val = val * 85 + (b - 33) as u64;
                 }
-                let b4 = val.to_be_bytes();
-                if count > 1 {
-                    out.extend_from_slice(&b4[..(count - 1)]);
+                if val > u32::MAX as u64 {
+                    return Err(OmniError::InvalidInput(
+                        "Invalid Ascii85 tuple: decoded value exceeds 32-bit unsigned range".into(),
+                    ));
                 }
+                let b4 = (val as u32).to_be_bytes();
+                out.extend_from_slice(&b4[..(count - 1)]);
             }
             Ok(DataPayload::bytes(out))
         } else {
             let bytes = input.into_bytes();
-            let mut out = String::new();
+            let mut out = String::with_capacity((bytes.len() / 4) * 5 + 5);
             let mut i = 0;
             while i < bytes.len() {
                 let remaining = bytes.len() - i;
@@ -362,15 +539,25 @@ impl Operation for Base91Op {
             "BasE91 binary encoding algorithm",
             OperationCategory::Encoders,
         )
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec!["encode".into(), "base91".into()])
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
-        let decode = config.get("decode").and_then(|v| v.as_bool()).unwrap_or(false);
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
+        let decode = config
+            .get("decode")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         const B91_TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&()*+,./:;<=>?@[]^_`{|}~\"";
 
         if decode {
             let s = input.into_text()?;
-            let mut out = Vec::new();
+            let mut out = Vec::with_capacity(s.len());
             let mut v: i32 = -1;
             let mut b: u32 = 0;
             let mut n: u32 = 0;
@@ -379,7 +566,9 @@ impl Operation for Base91Op {
                 if byte.is_ascii_whitespace() {
                     continue;
                 }
-                let pos = B91_TABLE.iter().position(|&x| x == byte).ok_or_else(|| OmniError::InvalidInput(format!("Invalid Base91 char: {}", byte as char)))? as i32;
+                let pos = B91_TABLE.iter().position(|&x| x == byte).ok_or_else(|| {
+                    OmniError::InvalidInput(format!("Invalid Base91 char: {}", byte as char))
+                })? as i32;
                 if v < 0 {
                     v = pos;
                 } else {
@@ -400,7 +589,7 @@ impl Operation for Base91Op {
             Ok(DataPayload::bytes(out))
         } else {
             let bytes = input.into_bytes();
-            let mut out = String::new();
+            let mut out = String::with_capacity(bytes.len() + bytes.len() / 4 + 2);
             let mut b: u32 = 0;
             let mut n: u32 = 0;
 

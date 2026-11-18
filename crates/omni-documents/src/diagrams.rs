@@ -35,22 +35,22 @@ struct ParsedGraph {
 
 fn parse_node_token(raw: &str) -> (String, Option<String>, NodeShape) {
     let s = raw.trim().trim_end_matches(';');
-    if let Some(idx) = s.find('[') {
-        if let Some(end) = s.rfind(']') {
+    if let (Some(idx), Some(end)) = (s.find('['), s.rfind(']')) {
+        if idx < end {
             let id = s[..idx].trim().to_string();
             let lbl = s[idx + 1..end].trim().trim_matches('"').to_string();
             return (id, Some(lbl), NodeShape::Rect);
         }
     }
-    if let Some(idx) = s.find('{') {
-        if let Some(end) = s.rfind('}') {
+    if let (Some(idx), Some(end)) = (s.find('{'), s.rfind('}')) {
+        if idx < end {
             let id = s[..idx].trim().to_string();
             let lbl = s[idx + 1..end].trim().trim_matches('"').to_string();
             return (id, Some(lbl), NodeShape::Diamond);
         }
     }
-    if let Some(idx) = s.find('(') {
-        if let Some(end) = s.rfind(')') {
+    if let (Some(idx), Some(end)) = (s.find('('), s.rfind(')')) {
+        if idx < end {
             let id = s[..idx].trim().to_string();
             let lbl = s[idx + 1..end].trim().trim_matches('"').to_string();
             return (id, Some(lbl), NodeShape::Rounded);
@@ -371,10 +371,7 @@ fn render_graph_svg(graph: &ParsedGraph, diagram_type: &str) -> String {
                         x,
                         cy
                     );
-                    svg.push_str(&format!(
-                        "  <polygon points=\"{}\" class=\"node\"/>\n",
-                        pts
-                    ));
+                    svg.push_str(&format!("  <polygon points=\"{}\" class=\"node\"/>\n", pts));
                 }
                 NodeShape::Rounded => {
                     svg.push_str(&format!(

@@ -1,6 +1,6 @@
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniError, OmniResult, Operation,
-    OperationCategory, OperationManifest,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
+    Operation, OperationCategory, OperationManifest,
 };
 use omni_security::validate_network_target;
 use serde_json::{json, Value};
@@ -21,17 +21,31 @@ impl Operation for LabScannerOp {
             OperationCategory::Networking,
         )
         .with_types(vec![DataType::Json, DataType::Text], vec![DataType::Json])
+        .with_status(FeatureStatus::Verified)
     }
 
-    async fn execute(&self, _input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
-        let action = config.get("action").and_then(|v| v.as_str()).unwrap_or("scan");
+    async fn execute(
+        &self,
+        _input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
+        let action = config
+            .get("action")
+            .and_then(|v| v.as_str())
+            .unwrap_or("scan");
 
         match action {
             "wol" => {
-                let mac_str = config.get("mac").and_then(|v| v.as_str()).unwrap_or("00:11:22:33:44:55");
+                let mac_str = config
+                    .get("mac")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("00:11:22:33:44:55");
                 let mac_clean: String = mac_str.chars().filter(|c| c.is_ascii_hexdigit()).collect();
                 if mac_clean.len() != 12 {
-                    return Err(OmniError::InvalidInput("MAC address must contain 12 hex digits".into()));
+                    return Err(OmniError::InvalidInput(
+                        "MAC address must contain 12 hex digits".into(),
+                    ));
                 }
 
                 let mac_bytes = hex::decode(mac_clean)
@@ -52,16 +66,35 @@ impl Operation for LabScannerOp {
                 })))
             }
             _ => {
-                let target = config.get("target").and_then(|v| v.as_str()).unwrap_or("127.0.0.1");
+                let target = config
+                    .get("target")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("127.0.0.1");
                 validate_network_target(target, false)?;
 
                 let default_ports = vec![80, 443, 8080, 22, 53, 3000];
-                let ports: Vec<u16> = config.get("ports")
+                let ports: Vec<u16> = config
+                    .get("ports")
                     .and_then(|v| v.as_array())
-                    .map(|arr| arr.iter().filter_map(|p| p.as_u64().map(|n| n as u16)).collect())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|p| p.as_u64().and_then(|n| u16::try_from(n).ok()))
+                            .filter(|&p| p > 0)
+                            .collect()
+                    })
                     .unwrap_or(default_ports);
 
-                let timeout_ms = config.get("timeout_ms").and_then(|v| v.as_u64()).unwrap_or(200);
+                if ports.len() > 1024 {
+                    return Err(OmniError::Validation(
+                        "Scanner port list cannot exceed 1024 ports per invocation".into(),
+                    ));
+                }
+
+                let timeout_ms = config
+                    .get("timeout_ms")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(200)
+                    .clamp(10, 5_000);
                 let mut results = Vec::new();
 
                 for port in ports {
@@ -76,10 +109,15 @@ impl Operation for LabScannerOp {
                         Ok(Ok(mut stream)) => {
                             // Attempt quick banner grab
                             let mut buf = [0u8; 128];
-                            let banner = match timeout(Duration::from_millis(50), stream.read(&mut buf)).await {
-                                Ok(Ok(n)) if n > 0 => String::from_utf8_lossy(&buf[..n]).trim().to_string(),
-                                _ => String::new(),
-                            };
+                            let banner =
+                                match timeout(Duration::from_millis(50), stream.read(&mut buf))
+                                    .await
+                                {
+                                    Ok(Ok(n)) if n > 0 => {
+                                        String::from_utf8_lossy(&buf[..n]).trim().to_string()
+                                    }
+                                    _ => String::new(),
+                                };
 
                             results.push(json!({
                                 "port": port,

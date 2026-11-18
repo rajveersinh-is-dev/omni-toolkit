@@ -1,10 +1,13 @@
 use flate2::read::GzDecoder;
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniResult, Operation,
-    OperationCategory, OperationManifest,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
+    Operation, OperationCategory, OperationManifest,
 };
+use omni_security::ResourceLimits;
 use serde_json::{json, Value};
 use std::io::Read;
+
+const MAX_ENTROPY_CHUNK_SIZE: u64 = 16 * 1024 * 1024;
 
 pub struct FirmwareExtractorOp;
 
@@ -17,7 +20,9 @@ struct FirmwareSignatureMatch {
 }
 
 fn calculate_entropy(chunk: &[u8]) -> f64 {
-    if chunk.is_empty() { return 0.0; }
+    if chunk.is_empty() {
+        return 0.0;
+    }
     let mut counts = [0usize; 256];
     for &b in chunk {
         counts[b as usize] += 1;
@@ -39,15 +44,32 @@ impl Operation for FirmwareExtractorOp {
         OperationManifest::new(
             "firmware.extract",
             "Firmware Signature Scanner & Entropy Mapper",
-            "Scans firmware blobs for SquashFS, CramFS, JFFS2, U-Boot, and compressed archives with block-by-block entropy mapping",
+            "Scans firmware blobs for SquashFS, CramFS, JFFS2, U-Boot, and compressed archives with block-by-block entropy mapping and decompression bomb protection",
             OperationCategory::BinaryAnalysis,
         )
         .with_types(vec![DataType::Bytes], vec![DataType::Json])
+        .with_status(FeatureStatus::Verified)
+        .with_tags(vec!["firmware".into(), "binwalk".into(), "entropy".into()])
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
         let bytes = input.into_bytes();
-        let chunk_size = config.get("entropy_chunk_size").and_then(|v| v.as_u64()).unwrap_or(1024) as usize;
+        let chunk_u64 = config
+            .get("entropy_chunk_size")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(1024);
+        if chunk_u64 == 0 || chunk_u64 > MAX_ENTROPY_CHUNK_SIZE {
+            return Err(OmniError::Validation(format!(
+                "entropy_chunk_size must be between 1 and {} bytes",
+                MAX_ENTROPY_CHUNK_SIZE
+            )));
+        }
+        let chunk_size = chunk_u64 as usize;
 
         // 1. Signature scan
         let mut matches = Vec::new();
@@ -126,18 +148,37 @@ impl Operation for FirmwareExtractorOp {
             }));
         }
 
-        // 3. Optional carving of first gzip stream
+        // 3. Optional bounded carving of first gzip stream (enforces decompression bomb limits)
         let mut carved_info = None;
-        if config.get("carve").and_then(|v| v.as_bool()).unwrap_or(false) {
+        if config
+            .get("carve")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+        {
             if let Some(m) = matches.iter().find(|m| m.description.contains("gzip")) {
-                let mut gz = GzDecoder::new(&bytes[m.offset..]);
-                let mut decompressed = Vec::new();
-                if gz.read_to_end(&mut decompressed).is_ok() {
-                    carved_info = Some(json!({
-                        "carved_from_offset": m.offset,
-                        "decompressed_size_bytes": decompressed.len(),
-                        "is_valid_decompression": true,
-                    }));
+                let compressed_slice = &bytes[m.offset..];
+                let limits = ResourceLimits::default();
+                let mut gz = GzDecoder::new(compressed_slice);
+                let mut buf = [0u8; 8192];
+                let mut total_decompressed = 0usize;
+                loop {
+                    match gz.read(&mut buf) {
+                        Ok(0) => {
+                            carved_info = Some(json!({
+                                "carved_from_offset": m.offset,
+                                "decompressed_size_bytes": total_decompressed,
+                                "is_valid_decompression": true,
+                                "bomb_check": "passed",
+                            }));
+                            break;
+                        }
+                        Ok(n) => {
+                            total_decompressed = total_decompressed.saturating_add(n);
+                            limits
+                                .check_decompression(compressed_slice.len(), total_decompressed)?;
+                        }
+                        Err(_) => break,
+                    }
                 }
             }
         }

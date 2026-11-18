@@ -45,12 +45,12 @@ impl Operation for PipelineMergeOp {
                             Err(_) => Value::String(format!("bytes:{}", b.len())),
                         },
                         DataPayload::FileRef(p) => Value::String(p.display().to_string()),
-                        DataPayload::Multi(inner) => serde_json::to_value(inner).map_err(|e| {
-                            OmniError::Execution {
+                        DataPayload::Multi(inner) => {
+                            serde_json::to_value(inner).map_err(|e| OmniError::Execution {
                                 operation: "pipeline.merge".into(),
                                 message: e.to_string(),
-                            }
-                        })?,
+                            })?
+                        }
                     };
                     obj.insert(key, val);
                 }
