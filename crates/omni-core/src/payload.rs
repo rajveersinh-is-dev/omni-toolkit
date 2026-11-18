@@ -1,5 +1,6 @@
 use crate::error::{OmniError, OmniResult};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -8,6 +9,7 @@ pub enum DataType {
     Bytes,
     Json,
     FileRef,
+    Multi,
     Any,
 }
 
@@ -18,6 +20,7 @@ impl std::fmt::Display for DataType {
             DataType::Bytes => write!(f, "bytes"),
             DataType::Json => write!(f, "json"),
             DataType::FileRef => write!(f, "file"),
+            DataType::Multi => write!(f, "multi"),
             DataType::Any => write!(f, "any"),
         }
     }
@@ -30,6 +33,7 @@ pub enum DataPayload {
     Bytes(Vec<u8>),
     Json(serde_json::Value),
     FileRef(PathBuf),
+    Multi(BTreeMap<String, DataPayload>),
 }
 
 impl DataPayload {
@@ -49,23 +53,33 @@ impl DataPayload {
         DataPayload::FileRef(p.into())
     }
 
+    pub fn multi(inputs: BTreeMap<String, DataPayload>) -> Self {
+        DataPayload::Multi(inputs)
+    }
+
+    pub fn as_multi(&self) -> Option<&BTreeMap<String, DataPayload>> {
+        match self {
+            DataPayload::Multi(map) => Some(map),
+            _ => None,
+        }
+    }
+
     pub fn data_type(&self) -> DataType {
         match self {
             DataPayload::Text(_) => DataType::Text,
             DataPayload::Bytes(_) => DataType::Bytes,
             DataPayload::Json(_) => DataType::Json,
             DataPayload::FileRef(_) => DataType::FileRef,
+            DataPayload::Multi(_) => DataType::Multi,
         }
     }
 
     pub fn as_str(&self) -> OmniResult<&str> {
         match self {
             DataPayload::Text(s) => Ok(s.as_str()),
-            DataPayload::Bytes(b) => std::str::from_utf8(b).map_err(|e| {
-                OmniError::TypeMismatch {
-                    expected: "valid UTF-8 string".into(),
-                    found: format!("binary bytes ({e})"),
-                }
+            DataPayload::Bytes(b) => std::str::from_utf8(b).map_err(|e| OmniError::TypeMismatch {
+                expected: "valid UTF-8 string".into(),
+                found: format!("binary bytes ({e})"),
             }),
             DataPayload::Json(v) => {
                 if let serde_json::Value::String(s) = v {
@@ -81,6 +95,10 @@ impl DataPayload {
                 expected: "inline string".into(),
                 found: format!("file reference ({})", p.display()),
             }),
+            DataPayload::Multi(m) => Err(OmniError::TypeMismatch {
+                expected: "single string".into(),
+                found: format!("multi-input bundle ({} inputs)", m.len()),
+            }),
         }
     }
 
@@ -88,8 +106,7 @@ impl DataPayload {
         match self {
             DataPayload::Bytes(b) => b.as_slice(),
             DataPayload::Text(s) => s.as_bytes(),
-            DataPayload::Json(_) => &[],
-            DataPayload::FileRef(_) => &[],
+            DataPayload::Json(_) | DataPayload::FileRef(_) | DataPayload::Multi(_) => &[],
         }
     }
 
@@ -99,16 +116,19 @@ impl DataPayload {
             DataPayload::Text(s) => s.into_bytes(),
             DataPayload::Json(v) => serde_json::to_vec(&v).unwrap_or_default(),
             DataPayload::FileRef(p) => std::fs::read(&p).unwrap_or_default(),
+            DataPayload::Multi(m) => serde_json::to_vec(&m).unwrap_or_default(),
         }
     }
 
     pub fn into_text(self) -> OmniResult<String> {
         match self {
             DataPayload::Text(s) => Ok(s),
-            DataPayload::Bytes(b) => String::from_utf8(b).map_err(|e| OmniError::TypeMismatch {
-                expected: "valid UTF-8 text".into(),
-                found: format!("binary stream ({e})"),
-            }),
+            DataPayload::Bytes(b) => {
+                String::from_utf8(b).map_err(|e| OmniError::TypeMismatch {
+                    expected: "valid UTF-8 text".into(),
+                    found: format!("binary stream ({e})"),
+                })
+            }
             DataPayload::Json(v) => {
                 if let serde_json::Value::String(s) = v {
                     Ok(s)
@@ -119,18 +139,35 @@ impl DataPayload {
                     })
                 }
             }
-            DataPayload::FileRef(p) => std::fs::read_to_string(&p).map_err(|e| OmniError::Io(e.to_string())),
+            DataPayload::FileRef(p) => {
+                std::fs::read_to_string(&p).map_err(|e| OmniError::Io(e.to_string()))
+            }
+            DataPayload::Multi(m) => {
+                serde_json::to_string_pretty(&m).map_err(|e| OmniError::Execution {
+                    operation: "into_text".into(),
+                    message: e.to_string(),
+                })
+            }
         }
     }
 
     pub fn into_json(self) -> OmniResult<serde_json::Value> {
         match self {
             DataPayload::Json(v) => Ok(v),
-            DataPayload::Text(s) => serde_json::from_str(&s).map_err(|e| OmniError::InvalidInput(format!("JSON parse error: {e}"))),
-            DataPayload::Bytes(b) => serde_json::from_slice(&b).map_err(|e| OmniError::InvalidInput(format!("JSON parse error: {e}"))),
+            DataPayload::Text(s) => serde_json::from_str(&s)
+                .map_err(|e| OmniError::InvalidInput(format!("JSON parse error: {e}"))),
+            DataPayload::Bytes(b) => serde_json::from_slice(&b)
+                .map_err(|e| OmniError::InvalidInput(format!("JSON parse error: {e}"))),
             DataPayload::FileRef(p) => {
                 let s = std::fs::read_to_string(&p).map_err(|e| OmniError::Io(e.to_string()))?;
-                serde_json::from_str(&s).map_err(|e| OmniError::InvalidInput(format!("JSON parse error: {e}")))
+                serde_json::from_str(&s)
+                    .map_err(|e| OmniError::InvalidInput(format!("JSON parse error: {e}")))
+            }
+            DataPayload::Multi(m) => {
+                serde_json::to_value(m).map_err(|e| OmniError::Execution {
+                    operation: "into_json".into(),
+                    message: e.to_string(),
+                })
             }
         }
     }
@@ -141,6 +178,7 @@ impl DataPayload {
             DataPayload::Bytes(b) => b.len(),
             DataPayload::Json(v) => serde_json::to_string(v).map(|s| s.len()).unwrap_or(0),
             DataPayload::FileRef(p) => std::fs::metadata(p).map(|m| m.len() as usize).unwrap_or(0),
+            DataPayload::Multi(m) => m.values().map(|v| v.size_bytes()).sum(),
         }
     }
 }
