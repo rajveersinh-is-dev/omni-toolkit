@@ -180,4 +180,127 @@ mod tests {
         let extracted = op.execute(stego_carrier, cfg_extract, &ctx).await.unwrap();
         assert_eq!(extracted.as_str().unwrap(), "HIDDEN_SECRET_KEY_42");
     }
+
+    #[tokio::test]
+    async fn test_pqc_ml_kem_768_real_keygen_encaps_decaps() {
+        let op = PqcOp { algorithm: "ml-kem".into() };
+        let ctx = ExecutionContext::new("t_pqc_kem");
+
+        let kp = op
+            .execute(DataPayload::text(""), serde_json::json!({ "action": "keygen" }), &ctx)
+            .await
+            .unwrap()
+            .into_json()
+            .unwrap();
+        let ek_hex = kp["encapsulation_key_hex"].as_str().unwrap();
+        let dk_hex = kp["decapsulation_key_hex"].as_str().unwrap();
+
+        let enc = op
+            .execute(
+                DataPayload::text(""),
+                serde_json::json!({ "action": "encapsulate", "encapsulation_key_hex": ek_hex }),
+                &ctx,
+            )
+            .await
+            .unwrap()
+            .into_json()
+            .unwrap();
+        let ct_hex = enc["ciphertext_hex"].as_str().unwrap();
+        let ss1 = enc["shared_secret_hex"].as_str().unwrap();
+
+        let dec = op
+            .execute(
+                DataPayload::text(""),
+                serde_json::json!({
+                    "action": "decapsulate",
+                    "decapsulation_key_hex": dk_hex,
+                    "ciphertext_hex": ct_hex
+                }),
+                &ctx,
+            )
+            .await
+            .unwrap()
+            .into_json()
+            .unwrap();
+        let ss2 = dec["shared_secret_hex"].as_str().unwrap();
+        assert_eq!(ss1, ss2);
+        assert_eq!(ss1.len(), 64); // 32 bytes hex
+    }
+
+    #[tokio::test]
+    async fn test_pqc_ml_dsa_65_sign_verify_and_tamper_detection() {
+        let op = PqcOp { algorithm: "ml-dsa".into() };
+        let ctx = ExecutionContext::new("t_pqc_dsa");
+
+        let kp = op
+            .execute(DataPayload::text(""), serde_json::json!({ "action": "keygen" }), &ctx)
+            .await
+            .unwrap()
+            .into_json()
+            .unwrap();
+        let pk_hex = kp["public_key_hex"].as_str().unwrap();
+        let sk_hex = kp["secret_key_hex"].as_str().unwrap();
+
+        let signed = op
+            .execute(
+                DataPayload::text("authentic message"),
+                serde_json::json!({ "action": "sign", "secret_key_hex": sk_hex }),
+                &ctx,
+            )
+            .await
+            .unwrap()
+            .into_json()
+            .unwrap();
+        let sig_hex = signed["signature_hex"].as_str().unwrap();
+
+        let verified = op
+            .execute(
+                DataPayload::text("authentic message"),
+                serde_json::json!({
+                    "action": "verify",
+                    "public_key_hex": pk_hex,
+                    "signature_hex": sig_hex
+                }),
+                &ctx,
+            )
+            .await
+            .unwrap()
+            .into_json()
+            .unwrap();
+        assert_eq!(verified["valid"], true);
+
+        // Tampered message must fail verification!
+        let tampered = op
+            .execute(
+                DataPayload::text("tampered message"),
+                serde_json::json!({
+                    "action": "verify",
+                    "public_key_hex": pk_hex,
+                    "signature_hex": sig_hex
+                }),
+                &ctx,
+            )
+            .await
+            .unwrap()
+            .into_json()
+            .unwrap();
+        assert_eq!(tampered["valid"], false);
+    }
+
+    #[tokio::test]
+    async fn test_pqc_slh_dsa_and_falcon_honest_unsupported() {
+        let ctx = ExecutionContext::new("t_pqc_slh");
+        let slh = PqcOp { algorithm: "sphincs_plus".into() };
+        let res = slh
+            .execute(DataPayload::text("slh test"), serde_json::json!({ "action": "roundtrip" }), &ctx)
+            .await
+            .unwrap()
+            .into_json()
+            .unwrap();
+        assert_eq!(res["valid"], true);
+
+        let falcon = PqcOp { algorithm: "falcon".into() };
+        assert_eq!(falcon.manifest().status, omni_core::FeatureStatus::Unsupported);
+        assert!(falcon.execute(DataPayload::text("msg"), serde_json::json!({}), &ctx).await.is_err());
+    }
 }

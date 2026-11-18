@@ -1,6 +1,7 @@
+use iced_x86::{Decoder, DecoderOptions, FlowControl, Formatter, IntelFormatter, Instruction};
 use omni_core::{
-    async_trait, DataPayload, DataType, ExecutionContext, OmniResult, Operation,
-    OperationCategory, OperationManifest,
+    async_trait, DataPayload, DataType, ExecutionContext, FeatureStatus, OmniError, OmniResult,
+    Operation, OperationCategory, OperationManifest,
 };
 use serde_json::{json, Value};
 
@@ -8,93 +9,66 @@ pub struct DisassemblyEngineOp;
 
 #[derive(Debug, Clone)]
 struct DecodedInstruction {
-    offset: usize,
+    offset: u64,
     bytes_hex: String,
-    mnemonic: String,
-    operands: String,
+    asm: String,
     is_branch: bool,
     is_terminal: bool,
-    target_offset: Option<usize>,
+    target_offset: Option<u64>,
 }
 
-fn disassemble_x86_stream(bytes: &[u8]) -> Vec<DecodedInstruction> {
+fn disassemble_x86_iced(bytes: &[u8], bitness: u32, base_ip: u64) -> Vec<DecodedInstruction> {
+    let mut decoder = Decoder::with_ip(bitness, bytes, base_ip, DecoderOptions::NONE);
+    let mut formatter = IntelFormatter::new();
+    let mut output = String::new();
     let mut instructions = Vec::new();
-    let mut i = 0;
+    let mut instr = Instruction::default();
 
-    while i < bytes.len() {
-        let offset = i;
-        let b = bytes[i];
+    while decoder.can_decode() {
+        decoder.decode_out(&mut instr);
+        output.clear();
+        formatter.format(&instr, &mut output);
 
-        let (mnemonic, operands, len, is_branch, is_term, target) = match b {
-            0x90 => ("nop", "".into(), 1, false, false, None),
-            0xCC => ("int3", "".into(), 1, false, false, None),
-            0xC3 => ("ret", "".into(), 1, false, true, None),
-            0xC2 if i + 2 < bytes.len() => {
-                let imm = u16::from_le_bytes([bytes[i + 1], bytes[i + 2]]);
-                ("ret", format!("0x{:X}", imm), 3, false, true, None)
+        let start = (instr.ip() - base_ip) as usize;
+        let len = instr.len();
+        let end = start.saturating_add(len).min(bytes.len());
+        let raw_hex = hex::encode(&bytes[start..end]);
+
+        let flow = instr.flow_control();
+        let is_branch = matches!(
+            flow,
+            FlowControl::UnconditionalBranch
+                | FlowControl::ConditionalBranch
+                | FlowControl::Call
+                | FlowControl::IndirectBranch
+                | FlowControl::IndirectCall
+        );
+        let is_terminal = matches!(
+            flow,
+            FlowControl::Return | FlowControl::UnconditionalBranch | FlowControl::IndirectBranch
+        );
+        let target_offset = match flow {
+            FlowControl::UnconditionalBranch
+            | FlowControl::ConditionalBranch
+            | FlowControl::Call => {
+                let t = instr.near_branch_target();
+                if t != 0 {
+                    Some(t)
+                } else {
+                    None
+                }
             }
-            0x50..=0x57 => {
-                let regs = ["rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi"];
-                ("push", regs[(b - 0x50) as usize].into(), 1, false, false, None)
-            }
-            0x58..=0x5F => {
-                let regs = ["rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi"];
-                ("pop", regs[(b - 0x58) as usize].into(), 1, false, false, None)
-            }
-            0xEB if i + 1 < bytes.len() => {
-                let rel = bytes[i + 1] as i8;
-                let dest = ((offset as isize) + 2 + (rel as isize)).max(0) as usize;
-                ("jmp", format!("0x{:08X}", dest), 2, true, true, Some(dest))
-            }
-            0xE9 if i + 4 < bytes.len() => {
-                let rel = i32::from_le_bytes([bytes[i + 1], bytes[i + 2], bytes[i + 3], bytes[i + 4]]);
-                let dest = ((offset as isize) + 5 + (rel as isize)).max(0) as usize;
-                ("jmp", format!("0x{:08X}", dest), 5, true, true, Some(dest))
-            }
-            0xE8 if i + 4 < bytes.len() => {
-                let rel = i32::from_le_bytes([bytes[i + 1], bytes[i + 2], bytes[i + 3], bytes[i + 4]]);
-                let dest = ((offset as isize) + 5 + (rel as isize)).max(0) as usize;
-                ("call", format!("0x{:08X}", dest), 5, true, false, Some(dest))
-            }
-            0x74 if i + 1 < bytes.len() => {
-                let rel = bytes[i + 1] as i8;
-                let dest = ((offset as isize) + 2 + (rel as isize)).max(0) as usize;
-                ("je", format!("0x{:08X}", dest), 2, true, false, Some(dest))
-            }
-            0x75 if i + 1 < bytes.len() => {
-                let rel = bytes[i + 1] as i8;
-                let dest = ((offset as isize) + 2 + (rel as isize)).max(0) as usize;
-                ("jne", format!("0x{:08X}", dest), 2, true, false, Some(dest))
-            }
-            0x0F if i + 1 < bytes.len() && bytes[i + 1] == 0x05 => {
-                ("syscall", "".into(), 2, false, false, None)
-            }
-            0x31 if i + 1 < bytes.len() && bytes[i + 1] == 0xC0 => {
-                ("xor", "eax, eax".into(), 2, false, false, None)
-            }
-            0x31 if i + 1 < bytes.len() && bytes[i + 1] == 0xED => {
-                ("xor", "ebp, ebp".into(), 2, false, false, None)
-            }
-            0xB8..=0xBF if i + 4 < bytes.len() => {
-                let regs = ["eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi"];
-                let imm = u32::from_le_bytes([bytes[i + 1], bytes[i + 2], bytes[i + 3], bytes[i + 4]]);
-                ("mov", format!("{}, 0x{:X}", regs[(b - 0xB8) as usize], imm), 5, false, false, None)
-            }
-            _ => ("db", format!("0x{:02X}", b), 1, false, false, None),
+            _ => None,
         };
 
-        let raw_hex = hex::encode(&bytes[offset..offset + len]);
         instructions.push(DecodedInstruction {
-            offset,
+            offset: instr.ip(),
             bytes_hex: raw_hex,
-            mnemonic: mnemonic.into(),
-            operands,
+            asm: output.clone(),
             is_branch,
-            is_terminal: is_term,
-            target_offset: target,
+            is_terminal,
+            target_offset,
         });
-
-        i += len;
     }
 
     instructions
@@ -105,33 +79,64 @@ impl Operation for DisassemblyEngineOp {
     fn manifest(&self) -> OperationManifest {
         OperationManifest::new(
             "binary.disasm",
-            "Multi-Architecture Disassembly & CFG Generator",
-            "Disassembles machine bytecode, identifies basic blocks, and produces Control Flow Graphs (CFG) in Mermaid and DOT formats",
+            "x86 / x86-64 Disassembler & CFG Generator",
+            "Disassembles x86-16, x86-32, and x86-64 machine code using iced-x86, identifies basic blocks, and outputs Control Flow Graphs (Mermaid/JSON)",
             OperationCategory::BinaryAnalysis,
         )
         .with_types(vec![DataType::Bytes], vec![DataType::Json, DataType::Text])
+        .with_status(FeatureStatus::Verified)
+        .with_limitations(vec![
+            "Supports x86-16, x86-32, and x86-64 instruction sets via iced-x86; ARM, AArch64, RISC-V, and MIPS are not implemented".into(),
+        ])
+        .with_tags(vec!["binary".into(), "disasm".into(), "x86".into(), "cfg".into()])
     }
 
-    async fn execute(&self, input: DataPayload, config: Value, _ctx: &ExecutionContext) -> OmniResult<DataPayload> {
+    async fn execute(
+        &self,
+        input: DataPayload,
+        config: Value,
+        _ctx: &ExecutionContext,
+    ) -> OmniResult<DataPayload> {
         let bytes = input.into_bytes();
-        let instructions = disassemble_x86_stream(&bytes);
+        let arch = config.get("arch").and_then(|v| v.as_str()).unwrap_or("x86_64");
+        let bitness = match arch.to_lowercase().as_str() {
+            "x86_64" | "x64" | "amd64" | "64" => 64,
+            "x86" | "x86_32" | "i386" | "32" => 32,
+            "x86_16" | "16" => 16,
+            other => {
+                return Err(OmniError::InvalidInput(format!(
+                    "Unsupported architecture '{}'. Supported: x86_64, x86_32, x86_16",
+                    other
+                )));
+            }
+        };
+        let base_ip = config.get("base_addr").and_then(|v| v.as_u64()).unwrap_or(0);
+        let max_instructions = config
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(500)
+            .clamp(1, 10_000) as usize;
+
+        let instructions = disassemble_x86_iced(&bytes, bitness, base_ip);
 
         // Build basic blocks
         let mut blocks = Vec::new();
         let mut current_block_instrs = Vec::new();
-        let mut block_start = 0;
+        let mut block_start = base_ip;
 
         for instr in &instructions {
             if current_block_instrs.is_empty() {
                 block_start = instr.offset;
             }
-            current_block_instrs.push(format!("0x{:04X}: {} {}", instr.offset, instr.mnemonic, instr.operands));
+            current_block_instrs.push(format!("0x{:04X}: {}", instr.offset, instr.asm));
 
             if instr.is_branch || instr.is_terminal {
+                let mnemonic = instr.asm.split_whitespace().next().unwrap_or("");
                 blocks.push(json!({
                     "start_offset": format!("0x{:04X}", block_start),
                     "instructions": current_block_instrs.clone(),
-                    "terminator": instr.mnemonic,
+                    "terminator": mnemonic,
+                    "is_terminal": instr.is_terminal,
                     "target": instr.target_offset.map(|t| format!("0x{:04X}", t)),
                 }));
                 current_block_instrs.clear();
@@ -143,6 +148,7 @@ impl Operation for DisassemblyEngineOp {
                 "start_offset": format!("0x{:04X}", block_start),
                 "instructions": current_block_instrs,
                 "terminator": "end",
+                "is_terminal": true,
                 "target": None::<String>,
             }));
         }
@@ -150,29 +156,41 @@ impl Operation for DisassemblyEngineOp {
         // Generate Mermaid CFG
         let mut mermaid = String::from("graph TD\n");
         for (idx, b) in blocks.iter().enumerate() {
-            let label = b["instructions"].as_array().map(|arr| {
-                arr.iter().filter_map(|s| s.as_str()).collect::<Vec<_>>().join("<br/>")
-            }).unwrap_or_default();
+            let label = b["instructions"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|s| s.as_str())
+                        .collect::<Vec<_>>()
+                        .join("<br/>")
+                })
+                .unwrap_or_default();
             mermaid.push_str(&format!("  B{}[\"{}\"]\n", idx, label));
             if let Some(target) = b["target"].as_str() {
                 mermaid.push_str(&format!("  B{} -->|jump| {}\n", idx, target));
             }
-            if idx + 1 < blocks.len() && b["terminator"] != "ret" && b["terminator"] != "jmp" {
+            let is_term = b["is_terminal"].as_bool().unwrap_or(false);
+            if idx + 1 < blocks.len() && !is_term {
                 mermaid.push_str(&format!("  B{} -->|fallthrough| B{}\n", idx, idx + 1));
             }
         }
 
-        let output_format = config.get("format").and_then(|v| v.as_str()).unwrap_or("json");
+        let output_format = config
+            .get("format")
+            .and_then(|v| v.as_str())
+            .unwrap_or("json");
         if output_format == "mermaid" {
             Ok(DataPayload::text(mermaid))
         } else {
             Ok(DataPayload::json(json!({
+                "architecture": format!("x86_{}", bitness),
+                "base_address": format!("0x{:X}", base_ip),
                 "total_instructions": instructions.len(),
                 "total_basic_blocks": blocks.len(),
-                "instructions": instructions.iter().take(100).map(|i| json!({
+                "instructions": instructions.iter().take(max_instructions).map(|i| json!({
                     "offset": format!("0x{:04X}", i.offset),
                     "hex": i.bytes_hex,
-                    "asm": format!("{} {}", i.mnemonic, i.operands).trim().to_string(),
+                    "asm": i.asm,
                 })).collect::<Vec<_>>(),
                 "basic_blocks": blocks,
                 "control_flow_graph_mermaid": mermaid,

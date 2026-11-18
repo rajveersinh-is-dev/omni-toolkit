@@ -15,6 +15,7 @@ async-trait = { workspace = true }
 thiserror = { workspace = true }
 hex = { workspace = true }
 goblin = "0.9"
+iced-x86 = "1.22"
 
 [dev-dependencies]
 tokio = { workspace = true }

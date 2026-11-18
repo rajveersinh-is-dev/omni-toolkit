@@ -46,12 +46,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_math_typesetting_svg() {
+    async fn test_math_typesetting_svg_and_mathml() {
         let op = MathTypesetOp;
         let ctx = ExecutionContext::new("t_math");
 
-        let math = "E = mc^2";
-        let res = op
+        let math = r"E = \frac{m c^2}{\sqrt{1 - \beta^2}}";
+        let svg_res = op
             .execute(
                 DataPayload::text(math),
                 serde_json::json!({ "format": "svg" }),
@@ -59,10 +59,24 @@ mod tests {
             )
             .await
             .unwrap();
-
-        let svg = res.into_text().unwrap();
+        let svg = svg_res.into_text().unwrap();
         assert!(svg.starts_with("<svg"));
-        assert!(svg.contains("E = mc^2"));
+        assert!(svg.contains("<line")); // fraction bar rendered
+        assert!(svg.contains("<polyline")); // square root radical rendered
+        assert!(svg.contains("β")); // Greek symbol decoded
+
+        let mathml_res = op
+            .execute(
+                DataPayload::text(math),
+                serde_json::json!({ "format": "mathml" }),
+                &ctx,
+            )
+            .await
+            .unwrap();
+        let mathml = mathml_res.into_text().unwrap();
+        assert!(mathml.contains("<mfrac>"));
+        assert!(mathml.contains("<msup>"));
+        assert!(mathml.contains("<msqrt>"));
     }
 
     #[tokio::test]
@@ -70,7 +84,7 @@ mod tests {
         let op = DiagramCompilerOp;
         let ctx = ExecutionContext::new("t_diag");
 
-        let diag = "graph TD\n  A[Input] --> B[Processing] --> C[Output]";
+        let diag = "graph TD\n  A[Ingest] --> B[Transform] --> C[Archive]";
         let res = op
             .execute(
                 DataPayload::text(diag),
@@ -82,6 +96,19 @@ mod tests {
 
         let svg = res.into_text().unwrap();
         assert!(svg.starts_with("<svg"));
-        assert!(svg.contains("Diagram Render"));
+        assert!(svg.contains("Ingest"));
+        assert!(svg.contains("Transform"));
+        assert!(svg.contains("Archive"));
+        assert!(svg.contains("3 nodes, 2 edges"));
+
+        // Invalid/empty graph must fail cleanly rather than emitting a placeholder
+        assert!(op
+            .execute(
+                DataPayload::text("not a graph"),
+                serde_json::json!({ "type": "mermaid" }),
+                &ctx,
+            )
+            .await
+            .is_err());
     }
 }

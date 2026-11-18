@@ -63,5 +63,10 @@ rand = "0.8"
 rand_core = "0.6"
 subtle = "2.6"
 
+# Post-Quantum Cryptography (NIST FIPS 203 / 204 / 205 pure-Rust standards)
+fips203 = "0.5"
+fips204 = "0.5"
+fips205 = "0.5"
+
 [dev-dependencies]
 tokio = { workspace = true }
